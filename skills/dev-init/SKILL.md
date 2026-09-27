@@ -49,7 +49,7 @@ Show one short proposal, then wait for the user's approval:
 
 ## 4. Finish
 
-Show a short summary of the changes, and ask whether to commit. Merge only when the user asks. Then follow the project's copy of `dev-next` at `.agents/skills/dev-next/SKILL.md`; it usually recommends exploring the root.
+Show a short summary of the changes, and ask whether to commit. Include all Framework-managed material in the commit, including the `.claude/skills` link: sync reports the link only when it creates it, so an existing but untracked link is easy to miss. Merge only when the user asks. Then follow the project's copy of `dev-next` at `.agents/skills/dev-next/SKILL.md`; it usually recommends exploring the root.
 
 ## Authority
 
