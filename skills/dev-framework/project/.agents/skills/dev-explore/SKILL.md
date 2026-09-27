@@ -1,6 +1,6 @@
 ---
 name: dev-explore
-description: Explore a node of a Dev Framework project's Plan. Chart its subtree breadth-first, then resolve its open questions with the user. Arguments: [node], default root.
+description: Explore a node of a Dev Framework project's Plan. Chart its subtree breadth-first, then resolve its open questions with the user. Takes a node name, root by default.
 disable-model-invocation: true
 ---
 

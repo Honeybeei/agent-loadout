@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: Create a session-cwd checkpoint, or resume one with workspace validation. Arguments: [create [focus] | resume [path]].
+description: Create a session-cwd checkpoint, or resume one with workspace validation. Takes create [focus] or resume [path].
 disable-model-invocation: true
 ---
 
