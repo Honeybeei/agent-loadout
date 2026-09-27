@@ -15,6 +15,7 @@ This document defines branches, worktrees, integration, and the approvals Git op
 - Work on a branch named `work/<short-purpose>` in lowercase English kebab-case, such as `work/improve-chat-responsiveness`. Name the outcome, not a change type such as feature or fix.
 - Start new branches from `main`. Start from another work branch only when the work depends on its unmerged changes, and say so.
 - A branch does not map one-to-one to a Plan item.
+- A UI prototype that must run inside the app lives on a `prototype/<name>` branch, which is never merged. Record its decision in the Plan or Knowledge; the branch only keeps the prototype for reference.
 - Renaming existing branches to this convention is a separate change.
 
 ## Worktrees

@@ -29,7 +29,13 @@ project-root/
 │   ├── dev-framework.md   Framework-managed index of the Framework rules
 │   └── dev-framework/     Framework-managed Framework rules
 ├── plan/
-│   └── README.md     Entry point to the project Plan
+│   ├── README.md     Entry point to the project Plan
+│   ├── map.md        Generated map of the Plan
+│   └── nodes/        One file per Plan node
+├── .agents/
+│   └── skills/       Agent skills: Framework-managed skills and any project skills
+├── .claude/
+│   └── skills        Link to ../.agents/skills, so Claude Code finds the same skills
 └── .tmp/             Temporary material, created when needed
 ```
 
@@ -60,7 +66,7 @@ Rules:
 - Only `dev.yaml` makes a directory a workspace; a README alone does not.
 - Workspaces do not nest.
 - The root can be the workspace, declared as `.`. Then `.` is the only entry, and the root README and root `knowledge/` also serve the workspace.
-- `knowledge/`, `plan/`, `.tmp/`, `.git`, `.agents/`, and anything inside them cannot be declared as a workspace. `.agents/` is reserved for project-specific agent skills.
+- `knowledge/`, `plan/`, `.tmp/`, `.git`, `.agents/`, `.claude/`, and anything inside them cannot be declared as a workspace.
 - Put Knowledge that spans workspaces in root `knowledge/`, not in copies inside several workspaces.
 - Add fields to `dev.yaml` only when an agreed need exists.
 
@@ -83,10 +89,14 @@ The Framework adds the following to a project and replaces them when the project
 | `knowledge/dev-framework/` | The Framework rules, including this document |
 | Section in root `README.md` | Points readers to the Framework rules |
 | Section in root `AGENTS.md` | Tells agents what to read before working |
+| `.agents/skills/dev-explore/`, `dev-implement/`, `dev-next/` | The Framework's workflow skills |
+| `.agents/skills/grilling/`, `research/`, `prototype/` | Skills the workflow skills use |
+| `.agents/skills/dev-framework/` | Scripts the workflow skills use |
+| `.claude/skills` | Link to `../.agents/skills` |
 
-- A managed section starts with a `<!-- dev-framework:start -->` line and ends with a `<!-- dev-framework:end -->` line. A managed document has `managed_by: dev-framework` in its frontmatter.
+- A managed section starts with a `<!-- dev-framework:start -->` line and ends with a `<!-- dev-framework:end -->` line. A managed document has `managed_by: dev-framework` in its frontmatter. Managed skill directories are the ones listed above; give project-specific skills other names.
 - Keep managed material unedited in the project. Put project-specific rules outside the managed sections, in `AGENTS.md` or project Knowledge. To change a Framework rule, change the Framework and update the project.
 
 ## Version control
 
-Keep durable project material in Git: root README and AGENTS, `dev.yaml`, `.gitignore`, workspace READMEs, Knowledge including Framework-managed material, and Plan. Read [Git workflow](git-workflow.md) before staging, committing, merging, or pushing; keeping material in Git does not authorize those actions.
+Keep durable project material in Git: root README and AGENTS, `dev.yaml`, `.gitignore`, workspace READMEs, Knowledge, Plan, and all Framework-managed material. Read [Git workflow](git-workflow.md) before staging, committing, merging, or pushing; keeping material in Git does not authorize those actions.

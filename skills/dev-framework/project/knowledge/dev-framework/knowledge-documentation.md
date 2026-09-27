@@ -81,6 +81,14 @@ knowledge/
 - State when to read each linked document, for example "read before changing persistence behavior".
 - Read only the documents a task needs, following those conditions. A summary does not replace an applicable detailed rule.
 
+## Glossary
+
+A project may keep `knowledge/glossary.md`, the single owner of its agreed terms. Create it when the first term is agreed.
+
+- Give each term one short entry: `**Term**: meaning. Avoid: <synonyms not to use>.`
+- Use the glossary's terms in documents, code names, and conversation.
+- When a term is fuzzy or used with two meanings, propose a precise term, and record it as soon as the user agrees.
+
 ## Length
 
 Aim for about 120 lines per document. Above 150 lines, consider compressing or splitting it. This is a review trigger, not a hard limit.

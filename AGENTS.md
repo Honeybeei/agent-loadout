@@ -19,9 +19,10 @@ Write this repository's documents by the Framework [writing rules](skills/dev-fr
 
 ## Skills layout
 
-- Keep every skill, `dev-framework/`, and `dev-check/` as a direct child of `skills/`. Applied copies use the same flat layout, and sibling-relative links such as `../dev-framework/` depend on it.
-- A skill directory must contain `SKILL.md`. `dev-framework/` and `dev-check/` are shared resources and have no `SKILL.md`.
-- `dev-framework/project/` mirrors a project root and is copied into Framework projects. Keep its links valid from that root; name section fragments `*.section.md`, never `README.md` or `AGENTS.md`, so no harness loads them as instructions.
+- Every direct child of `skills/` is installed into the harness. A skill directory must contain `SKILL.md`; `dev-framework/` is the Framework source and has none.
+- `dev-framework/project/` mirrors a project root and is copied into Framework projects. Keep its links valid from that root.
+- Put the Framework's project skills in `dev-framework/project/.agents/skills/`, never directly under `skills/`: a harness copy would take precedence over the project copy in Claude Code.
+- Name section fragments `*.section.md`, never `README.md` or `AGENTS.md`, and add no `.claude/` directory under `dev-framework/project/`, so no harness loads them as instructions or skills while working in this repository.
 - Keep links inside `skills/` relative, and make sure each target exists.
 - When adding, renaming, or removing a skill, update the README and every link that names it.
 

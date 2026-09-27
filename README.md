@@ -39,12 +39,16 @@ agent-loadout/
 │   └── <harness>.md     Per-harness additions
 ├── scripts/             Apply and check scripts with their tests
 └── skills/              Copied one-to-one into each harness's skills directory
-    ├── dev-framework/   Framework source, no SKILL.md; project/ is copied into Framework projects
-    ├── dev-check/       Shared inspection resources, no SKILL.md
-    └── <skill>/         One directory per skill
+    ├── dev-framework/   Framework source, no SKILL.md
+    │   └── project/     Mirrors a project root; copied into Framework projects,
+    │                    including the workflow skills in project/.agents/skills/
+    ├── dev-init/        Makes a repository a Framework project
+    ├── dev-update/      Updates a Framework project to this Framework
+    ├── handoff/
+    └── writing-for-agents/
 ```
 
-`skills/` mirrors the applied layout. Framework skills link to each other and to `dev-framework/` and `dev-check/` with sibling-relative paths such as `../dev-framework/`, so every entry must stay a direct child of `skills/`.
+Every direct child of `skills/` is installed into the harness. The Framework's workflow skills (`dev-explore`, `dev-implement`, `dev-next`) and the skills they use (`grilling`, `research`, `prototype`) are not; they live in each Framework project, where they match that project's version of the rules.
 
 ## Applying
 
@@ -64,14 +68,19 @@ Imported so far:
 
 - `prompt/common.md`: the introduction and the communication, collaboration, changes, and verification and publication sections. The global prompt covers agent behavior only; document writing rules belong to projects and the Framework. The former web research and subagent delegation sections are not imported; each harness handles those itself.
 - `skills/writing-for-agents/`: `SKILL.md` and `SKILL-MECHANICS.md` unchanged from [mattpocock/skills](https://github.com/mattpocock/skills/tree/main/skills/productivity/writing-for-agents) commit `c55ee46`, with that repository's MIT `LICENSE`. The Codex-only `agents/openai.yaml` is not imported.
-- `skills/grilling/`: the Framework version from my-pi, which adapts [mattpocock/skills](https://github.com/mattpocock/skills/tree/main/skills/productivity/grilling) commit `c55ee46` to ask one question per round and to end at a bounded judgment. The Dev Cycle sentence is removed so the skill reads correctly outside the Framework. Includes the upstream MIT `LICENSE`.
 - `skills/handoff/`: all files from my-pi. `SKILL.md` and `references/create.md` replace Pi invocation syntax and the "Pi session" wording with harness-neutral text; the other files are unchanged.
 
 The Framework is being redesigned rather than copied: the my-pi version serves as a reference, and each Framework file is rewritten after its decisions are settled.
 
-- `skills/dev-framework/`: the entry `README.md` and `project/`, which holds the managed material for projects: the rules index, the base rules (writing rules, project structure, Knowledge documentation, README and AGENTS guideline, Git workflow), and the README and AGENTS section fragments. Writing rules are unchanged from my-pi apart from frontmatter; the other rules are rewritten. Plan documentation, the project copy tool, and the workflow skills are not defined yet.
+- `skills/dev-framework/`: the entry `README.md` and `project/`, which holds the managed material for projects:
+  - the rules index and the rules (writing rules, project structure, Knowledge documentation, README and AGENTS guideline, Git workflow, Plan documentation). Writing rules are unchanged from my-pi apart from frontmatter; the other rules are rewritten.
+  - the README and AGENTS section fragments;
+  - `.agents/skills/dev-explore/`, `dev-implement/`, and `dev-next/`, newly written;
+  - `.agents/skills/dev-framework/scripts/map.ts`, newly written;
+  - `.agents/skills/grilling/`: the Framework version from my-pi, which adapts [mattpocock/skills](https://github.com/mattpocock/skills/tree/main/skills/productivity/grilling) commit `c55ee46` to ask one question per round and to end at a bounded judgment, without its Dev Cycle sentence; with the upstream MIT `LICENSE`;
+  - `.agents/skills/research/` and `.agents/skills/prototype/`: unchanged from mattpocock/skills commit `c55ee46`, with the upstream MIT `LICENSE`.
 
-Until the Framework text is revised, parts of it still describe project-local Framework copies and managed root blocks, which the current model no longer uses.
+- `skills/dev-init/`, `skills/dev-update/`, and `skills/dev-framework/scripts/sync.ts`, newly written.
 
 ## Development
 

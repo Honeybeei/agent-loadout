@@ -9,8 +9,7 @@
     "includes": [
       "scripts/**/*.ts",
       "skills/**/*.ts",
-      "!!skills/dev-framework",
-      "!!skills/dev-check",
+      "skills/dev-framework/project/.agents/**/*.ts",
       "biome.json",
       "package.json",
       "tsconfig.json"
