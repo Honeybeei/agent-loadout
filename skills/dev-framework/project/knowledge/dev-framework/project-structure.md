@@ -41,7 +41,7 @@ project-root/
 
 A project may contain other files and directories; the Framework does not require an `apps/`, `packages/`, or similar layout.
 
-A project that lacks a required path is incompletely set up. Report the gap; missing structure alone does not authorize creating files.
+Every path in the tree is required, except `.tmp/`, which is created when needed. A project that lacks a required path is incompletely set up. Report the gap; missing structure alone does not authorize creating files.
 
 ## Workspaces
 

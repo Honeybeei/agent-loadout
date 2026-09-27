@@ -22,7 +22,7 @@ Run the scripts from the project root:
 
 ## 2. Sync
 
-1. Create `work/update-dev-framework` from `main`.
+1. Create `work/update-dev-framework` from `main`. When the project's latest records are on a work branch not yet merged, branch from that one instead and say so.
 2. Run sync, then run the map script. The map script may report old record formats; step 3 handles them.
 
 ## 3. Check records against the new rules
@@ -35,6 +35,7 @@ Read the updated rules in `knowledge/dev-framework/`, then check:
 | Plan | The problems the map script reports, such as old frontmatter fields, old status values, or inconsistent statuses |
 | Knowledge | Every document has `canonical_for`, and `subdocs` lists every child |
 | Leftovers | Material from earlier Framework versions that sync does not manage, such as old skills in `.agents/skills/` |
+| Links | Project documents that link to paths an earlier Framework used; point them to `knowledge/dev-framework/` |
 
 Propose one fix per finding. When a fix needs judgment, such as which status an old node should get, recommend a value for each node. Apply only the fixes the user approves, then regenerate the map.
 

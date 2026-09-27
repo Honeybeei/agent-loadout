@@ -1,6 +1,6 @@
 # Agent Loadout
 
-This repository is the source of truth for the global prompt, personal skills, and the Dev Framework that are applied to every supported harness. Read [README.md](README.md) for the purpose, supported harnesses, and layout.
+This repository is the source of truth for the global prompt, personal skills, and the Dev Framework. Harnesses receive the prompt and skills through the apply script; Framework projects receive the Framework through `dev-init` and `dev-update`. Read [README.md](README.md) for the purpose, supported harnesses, and layout.
 
 ## Writing
 
@@ -9,12 +9,12 @@ Write this repository's documents by the Framework [writing rules](skills/dev-fr
 ## Global prompt and Framework boundary
 
 - The global prompt defines how an agent behaves in every working directory and harness. Keep `prompt/` free of project rules such as document writing rules, and of the Framework. Framework projects carry their own managed `AGENTS.md` section and rule copies, so the global prompt does not need to mention the Framework.
-- Keep the Framework self-contained under `skills/`. Framework files must not depend on the global prompt for their rules.
+- Keep the Framework self-contained in `skills/dev-framework/`, `skills/dev-init/`, and `skills/dev-update/`. Framework files must not depend on the global prompt for their rules.
 
 ## Harness neutrality
 
 - Write skills, Framework text, and `prompt/common.md` so they read correctly in every supported harness. Do not assume one harness's tools, commands, or invocation syntax.
-- Put material that only one harness needs in that harness's prompt addition or apply module.
+- Put material that only one harness needs in that harness's prompt addition (`prompt/<harness>.md`) or its entry in `scripts/harnesses.ts`.
 - Keep harness settings out of this repository: themes, keybindings, models, authentication, Pi extensions, and Pi subagents.
 
 ## Skills layout
@@ -36,4 +36,4 @@ Write this repository's documents by the Framework [writing rules](skills/dev-fr
 
 - Use Bun for installing, running, and testing: `bun install`, `bun run <script>`, `bun test`, and `bun <file>`. Do not use npm, npx, Node, or other test runners.
 - Write scripts in TypeScript with the strict settings in [tsconfig.json](tsconfig.json).
-- After changing TypeScript, run `bun run lint`, `bun run typecheck`, and `bun run test`.
+- After any change, run `bun run lint`, `bun run typecheck`, and `bun run test`. The tests also check every skill's frontmatter and every relative link in the documents.

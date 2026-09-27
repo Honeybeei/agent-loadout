@@ -14,6 +14,7 @@ The project's rules are indexed in [Dev Framework rules](../../../knowledge/dev-
 
 - Confirm the project root has `dev.yaml` and `knowledge/dev-framework.md`. Otherwise, suggest `dev-init` and stop.
 - The target is the node named in the arguments, or `root` when none is given.
+- If the current branch is `main`, create `work/explore-<node>` before writing, as [Git workflow](../../../knowledge/dev-framework/git-workflow.md) says.
 - Read `plan/map.md`, the target node, its ancestors' Goal sections, the glossary if it exists, and the Knowledge the target relies on. If the map is missing or stale, regenerate it first (see [Map](#map)).
 
 ## 2. Chart
@@ -22,7 +23,7 @@ Skip this step when the target already has a clear subtree.
 
 1. Interview the user breadth-first with [grilling](../grilling/SKILL.md): cover the target's whole scope (its parts, what is known, what is not) before going deep on any branch.
 2. Write what became clear, immediately:
-   - the target's Goal and known Completion criteria;
+   - the target's Goal, known Completion criteria, and status;
    - child nodes, as many levels deep as they are clear;
    - for each node: its status, open questions, Not yet specified, and Out of scope.
 3. Give an unclear area that can be named its own `fog` node. Do not split fog into guessed pieces.
@@ -49,7 +50,9 @@ After each answer:
 
 ## 4. Stop
 
-Stop when no open question in the target's subtree can be resolved now, or when the user says so. Everything is already in the Plan, so the next run continues from the map. Then follow [dev-next](../dev-next/SKILL.md).
+Stop when no open question in the target's subtree can be resolved now, or when the user says so. Everything is already in the Plan, so the next run continues from the map.
+
+Show the changed Plan and Knowledge files, ask whether to commit them, then follow [dev-next](../dev-next/SKILL.md).
 
 ## Authority
 

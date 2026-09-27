@@ -63,7 +63,7 @@ Record the progress so far in Record, then stop and ask when:
 
 | Without asking | Always separate |
 | --- | --- |
-| Editing code, tests, and documents within the node's scope; running checks; creating the work branch; updating the node's criteria, Record, and status up to `in_progress`; regenerating the map | Marking `done`; staging, commits, merges, pushes; installs; external services; destructive or hard-to-reverse actions; changes affecting security or cost |
+| Editing code, tests, and documents within the node's scope; running checks; creating the work branch; ticking met criteria, adding Record lines, and setting the status up to `in_progress`; regenerating the map | Marking `done`; staging, commits, merges, pushes; installs; external services; destructive or hard-to-reverse actions; changes affecting security or cost |
 
 ## Map
 
