@@ -1,6 +1,6 @@
 ---
 name: dev-implement
-description: Implement a ready node of a Dev Framework project's Plan in blackbox or collaborative mode, or close a decomposed node whose children are finished. Arguments: <node> [blackbox | collaborative].
+description: Implement a ready node of a Dev Framework project's Plan in blackbox or collaborative mode, or close a decomposed node whose children are finished. Takes a node name and, optionally, blackbox or collaborative.
 disable-model-invocation: true
 ---
 
