@@ -14,7 +14,7 @@ This repository holds:
 - Personal skills that are useful in any project.
 - The Dev Framework: a method for managing projects. It applies to a project whose repository root contains `dev.yaml`.
 
-Projects hold only project-specific material, such as `AGENTS.md` with project rules, `plan/`, `knowledge/`, `dev.yaml`, and code. They contain no Framework copies.
+A Framework project carries managed copies of the Framework's base rules (`knowledge/dev-framework/`) and managed sections in its root README and AGENTS, so any person or agent can read its rules without this repository. The Framework's workflow skills stay in the harness.
 
 Harness-specific settings stay in each harness's own configuration: themes, keybindings, models, authentication, Pi extensions, and Pi subagents.
 
@@ -39,7 +39,7 @@ agent-loadout/
 │   └── <harness>.md     Per-harness additions
 ├── scripts/             Apply and check scripts with their tests
 └── skills/              Copied one-to-one into each harness's skills directory
-    ├── dev-framework/   Framework specification and shared resources, no SKILL.md
+    ├── dev-framework/   Framework source, no SKILL.md; project/ is copied into Framework projects
     ├── dev-check/       Shared inspection resources, no SKILL.md
     └── <skill>/         One directory per skill
 ```
@@ -62,12 +62,14 @@ The repository is being assembled by reviewing each file before adding it. The i
 
 Imported so far:
 
-- `prompt/common.md`: the introduction and the writing, collaboration, changes, and verification and publication sections. The writing section merges the former global writing preferences with general rules from the Framework's former writing rules. The former web research and subagent delegation sections are not imported; each harness handles those itself.
+- `prompt/common.md`: the introduction and the communication, collaboration, changes, and verification and publication sections. The global prompt covers agent behavior only; document writing rules belong to projects and the Framework. The former web research and subagent delegation sections are not imported; each harness handles those itself.
 - `skills/writing-for-agents/`: `SKILL.md` and `SKILL-MECHANICS.md` unchanged from [mattpocock/skills](https://github.com/mattpocock/skills/tree/main/skills/productivity/writing-for-agents) commit `c55ee46`, with that repository's MIT `LICENSE`. The Codex-only `agents/openai.yaml` is not imported.
 - `skills/grilling/`: the Framework version from my-pi, which adapts [mattpocock/skills](https://github.com/mattpocock/skills/tree/main/skills/productivity/grilling) commit `c55ee46` to ask one question per round and to end at a bounded judgment. The Dev Cycle sentence is removed so the skill reads correctly outside the Framework. Includes the upstream MIT `LICENSE`.
 - `skills/handoff/`: all files from my-pi. `SKILL.md` and `references/create.md` replace Pi invocation syntax and the "Pi session" wording with harness-neutral text; the other files are unchanged.
 
-The Framework's `references/writing-rules.md` is not imported. Framework projects follow the global writing defaults like any other project, so the Framework defines no writing rules of its own.
+The Framework is being redesigned rather than copied: the my-pi version serves as a reference, and each Framework file is rewritten after its decisions are settled.
+
+- `skills/dev-framework/`: the entry `README.md` and `project/`, which holds the managed material for projects: the rules index, the base rules (writing rules, project structure, Knowledge documentation, README and AGENTS guideline, Git workflow), and the README and AGENTS section fragments. Writing rules are unchanged from my-pi apart from frontmatter; the other rules are rewritten. Plan documentation, the project copy tool, and the workflow skills are not defined yet.
 
 Until the Framework text is revised, parts of it still describe project-local Framework copies and managed root blocks, which the current model no longer uses.
 
