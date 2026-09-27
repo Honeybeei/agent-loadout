@@ -1,6 +1,6 @@
 # Agent Loadout
 
-This repository is the source of truth for the global prompt, personal skills, and the Dev Framework. Harnesses receive the prompt and skills through the apply script; Framework projects receive the Framework through `dev-init` and `dev-update`. Read [README.md](README.md) for the purpose, supported harnesses, and layout.
+This repository is the source of truth for the global prompt, personal skills, and the Dev Framework. Harnesses receive the prompt and skills through the apply script; Framework projects receive the Framework through `dev-doctor`. Read [README.md](README.md) for the purpose, supported harnesses, and layout.
 
 ## Writing
 
@@ -9,7 +9,7 @@ Write this repository's documents by the Framework [writing rules](skills/dev-fr
 ## Global prompt and Framework boundary
 
 - The global prompt defines how an agent behaves in every working directory and harness. Keep `prompt/` free of project rules such as document writing rules, and of the Framework. Framework projects carry their own managed `AGENTS.md` section and rule copies, so the global prompt does not need to mention the Framework.
-- Keep the Framework self-contained in `skills/dev-framework/`, `skills/dev-init/`, and `skills/dev-update/`. Framework files must not depend on the global prompt for their rules.
+- Keep the Framework self-contained in `skills/dev-framework/` and `skills/dev-doctor/`. Framework files must not depend on the global prompt for their rules.
 
 ## Harness neutrality
 

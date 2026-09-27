@@ -12,7 +12,7 @@ The project's rules are indexed in [Dev Framework rules](../../../knowledge/dev-
 
 ## 1. Orient
 
-- Confirm the project root has `dev.yaml` and `knowledge/dev-framework.md`. Otherwise, suggest `dev-init` and stop.
+- Confirm the project root has `dev.yaml` and `knowledge/dev-framework.md`. Otherwise, suggest `dev-doctor` and stop.
 - The target is the node named in the arguments, or `root` when none is given.
 - If the current branch is `main`, create `work/explore-<node>` before writing, as [Git workflow](../../../knowledge/dev-framework/git-workflow.md) says.
 - Read `plan/map.md`, the target node, its ancestors' Goal sections, the glossary if it exists, and the Knowledge the target relies on. If the map is missing or stale, regenerate it first (see [Map](#map)).

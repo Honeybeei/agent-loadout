@@ -20,7 +20,7 @@ Take the mode from the arguments or from the user's choice in `dev-next`. If the
 
 ## 1. Orient
 
-- Confirm the project root has `dev.yaml` and `knowledge/dev-framework.md`. Otherwise, suggest `dev-init` and stop.
+- Confirm the project root has `dev.yaml` and `knowledge/dev-framework.md`. Otherwise, suggest `dev-doctor` and stop.
 - Read the node. It must be `ready` or `in_progress`, have no unfinished children, and have every `depends_on` node `done`. Otherwise, say why and follow [dev-next](../dev-next/SKILL.md).
 - Read what the node relies on, its Completion criteria, Verification, and Out of scope, its ancestors' Goal sections, the glossary if it exists, the relevant code, and the checks the root `AGENTS.md` names.
 
