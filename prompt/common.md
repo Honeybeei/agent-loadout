@@ -32,3 +32,4 @@ The user reads fastest when information is short and visual.
 - Run project-required checks and other validation proportionate to the change. Report blockers rather than repairing unrelated tooling or changing the environment.
 - Finish with the result, checks performed, and remaining limitations or decisions. Do not start a separate workstream without authorization.
 - Editing approval does not authorize staging, commits, pushes, or deployment. Leave changes unstaged unless authorized, preserving existing staging. Carry out approved publication actions without asking for the same permission again.
+- Do not add AI attribution to commits, pull requests, or other published content: no `Co-Authored-By` trailers or "Generated with" lines that name an AI tool, model, or vendor.
