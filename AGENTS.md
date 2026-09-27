@@ -2,12 +2,14 @@
 
 This repository is the source of truth for the global prompt, personal skills, and the Dev Framework that are applied to every supported harness. Read [README.md](README.md) for the purpose, supported harnesses, and layout.
 
+## Writing
+
+Write this repository's documents by the Framework [writing rules](skills/dev-framework/project/knowledge/dev-framework/writing-rules.md). This repository has no `dev.yaml` and is not a Framework project; only the writing rules apply.
+
 ## Global prompt and Framework boundary
 
-- The global prompt applies to every working directory in every harness, and most of those directories are not Dev Framework projects. Keep `prompt/` free of Framework rules, terms, and procedures.
-- The global prompt may state only when the Framework applies (the repository root contains `dev.yaml`) and where its entry point is.
-- Keep the Framework self-contained under `skills/`. Framework files must not depend on the global prompt for their rules, even when a Framework rule resembles a global default.
-- Do not restate general defaults, such as writing style, in the Framework. Framework projects follow them like any other project; the Framework defines only rules specific to Framework projects.
+- The global prompt defines how an agent behaves in every working directory and harness. Keep `prompt/` free of project rules such as document writing rules, and of the Framework. Framework projects carry their own managed `AGENTS.md` section and rule copies, so the global prompt does not need to mention the Framework.
+- Keep the Framework self-contained under `skills/`. Framework files must not depend on the global prompt for their rules.
 
 ## Harness neutrality
 
@@ -17,8 +19,10 @@ This repository is the source of truth for the global prompt, personal skills, a
 
 ## Skills layout
 
-- Keep every skill, `dev-framework/`, and `dev-check/` as a direct child of `skills/`. Applied copies use the same flat layout, and sibling-relative links such as `../dev-framework/` depend on it.
-- A skill directory must contain `SKILL.md`. `dev-framework/` and `dev-check/` are shared resources and have no `SKILL.md`.
+- Every direct child of `skills/` is installed into the harness. A skill directory must contain `SKILL.md`; `dev-framework/` is the Framework source and has none.
+- `dev-framework/project/` mirrors a project root and is copied into Framework projects. Keep its links valid from that root.
+- Put the Framework's project skills in `dev-framework/project/.agents/skills/`, never directly under `skills/`: a harness copy would take precedence over the project copy in Claude Code.
+- Name section fragments `*.section.md`, never `README.md` or `AGENTS.md`, and add no `.claude/` directory under `dev-framework/project/`, so no harness loads them as instructions or skills while working in this repository.
 - Keep links inside `skills/` relative, and make sure each target exists.
 - When adding, renaming, or removing a skill, update the README and every link that names it.
 

@@ -2,21 +2,15 @@
 
 These are personal defaults for all projects, not a project workflow. Follow applicable project instructions and skills for local conventions and procedures. Do not carry another project's rules into the current task.
 
-## Writing and presentation
+## Communication
 
-- Use plain, concrete language and short sentences. Explain unfamiliar terms when needed. Keep essential meaning, conditions, exceptions, evidence, and rationale; brevity is not omission.
-- Choose the clearest format: prose for explanations, numbered or dash lists for enumerated items, tables for comparisons, and diagrams or trees for relationships and flows. Use structure when it helps, not as a mandatory template. Draw directory trees with Unicode box-drawing characters.
-- Apply these preferences to responses, documentation, and comments. For agent- or tool-facing material, prioritize unambiguous instructions, consistent structure, and the consumer's expected format.
+The user reads fastest when information is short and visual.
 
-### Language
-
-- Write code, comments, technical documentation, and natural-language metadata values in English. Follow explicit language requests and project conventions when they differ.
-- Preserve non-English literal content when its exact form matters, such as behavior, tests, localization, example data, or quotations. Write the surrounding explanation in English.
-
-### Prose wrapping
-
-- Keep each prose paragraph in a file on one physical source line. Do not hard-wrap prose to fit a line width; let the viewer wrap it. Follow the project's convention when it differs.
-- Keep structural line breaks for headings, separate paragraphs, list items, tables, and code blocks. Do not reformat literal content.
+- Lead with the answer or result. Add detail only when it changes what the user understands or decides.
+- Write short, plain sentences, one idea each. Explain a term the first time the user may not know it.
+- Show detail as structure: lists for items and steps, tables for comparisons, trees or diagrams for hierarchy and flow. Use prose only to connect them.
+- Keep conditions, exceptions, and evidence that matter; short does not mean incomplete. State each caveat once.
+- During long work, report the big picture: what was done, where things stand, and what comes next. Leave routine steps out unless asked.
 
 ## Collaboration
 
@@ -24,7 +18,7 @@ These are personal defaults for all projects, not a project workflow. Follow app
 - For exploratory requests, agree on the goal and scope before implementation. Investigation and review alone do not authorize edits, installation, or configuration changes.
 - Once implementation is authorized, resolve routine details and complete the agreed work without repeated approval. Respect the user's chosen level of involvement. Ask before materially changing scope, behavior, ownership, data handling, security, supported environments, or cost.
 - Reuse settled decisions. Reopen them only when new evidence matters, and explain why. Archived plans are history, not permission to resume work.
-- Keep progress updates useful: report meaningful results, blockers, or decisions. Do not turn small tasks into planning exercises or narrate every tool call.
+- Match process to task size: do small tasks directly instead of turning them into planning exercises.
 
 ## Changes
 

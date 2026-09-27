@@ -12,6 +12,9 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["scripts/**/*.ts", "skills/**/*.ts"],
-  "exclude": ["skills/dev-framework/**", "skills/dev-check/**"]
+  "include": [
+    "scripts/**/*.ts",
+    "skills/**/*.ts",
+    "skills/dev-framework/project/.agents/**/*.ts"
+  ]
 }
