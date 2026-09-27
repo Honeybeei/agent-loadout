@@ -16,7 +16,11 @@ function skillFiles(directory: string): string[] {
 const files = skillFiles(join(REPO, "skills"));
 
 test("finds the skills, including the Framework's project skills", () => {
-  expect(files.length).toBeGreaterThanOrEqual(10);
+  const paths = files.map((file) => relative(REPO, file));
+  expect(paths).toContain("skills/dev-doctor/SKILL.md");
+  expect(paths).toContain(
+    "skills/dev-framework/project/.agents/skills/dev-next/SKILL.md",
+  );
 });
 
 for (const file of files) {

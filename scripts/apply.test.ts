@@ -58,14 +58,14 @@ describe("apply", () => {
     const root = home();
     const result = apply(root, "claude-code", "--check");
     expect(result.code).toBe(1);
-    expect(result.out).toContain("would add skill dev-init");
+    expect(result.out).toContain("would add skill dev-doctor");
     expect(existsSync(join(root, ".claude"))).toBe(false);
   });
 
   test("installs skills and the prompt section, then reports no changes", () => {
     const root = home({ ".claude/CLAUDE.md": "" });
     expect(apply(root, "claude-code").code).toBe(0);
-    expect(existsSync(join(root, ".claude/skills/dev-init/SKILL.md"))).toBe(
+    expect(existsSync(join(root, ".claude/skills/dev-doctor/SKILL.md"))).toBe(
       true,
     );
     expect(

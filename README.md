@@ -1,6 +1,6 @@
 # Agent Loadout
 
-Agent Loadout is the single source of truth for the material that every development harness should share: the global prompt, personal skills, and the Dev Framework. An apply script installs the global prompt and skills into each harness's user area; the Framework's `dev-init` and `dev-update` skills then copy the Framework into each project. The same skills and rules work regardless of which harness or inference provider runs the session.
+Agent Loadout is the single source of truth for the material that every development harness should share: the global prompt, personal skills, and the Dev Framework. An apply script installs the global prompt and skills into each harness's user area; the Framework's `dev-doctor` skill then copies the Framework into each project, keeps it up to date, and checks that the project follows its rules. The same skills and rules work regardless of which harness or inference provider runs the session.
 
 ## Why
 
@@ -14,7 +14,7 @@ This repository holds:
 - Personal skills that are useful in any project.
 - The Dev Framework: a method for managing projects. It applies to a project whose repository root contains `dev.yaml`.
 
-A Framework project carries its own managed copy of the Framework: the rules in `knowledge/dev-framework/`, managed sections in its root README and AGENTS, and the workflow skills in `.agents/skills/`. `dev-init` and `dev-update` put them there, so any person or agent can read the rules and use the skills without this repository. See [skills/dev-framework/README.md](skills/dev-framework/README.md).
+A Framework project carries its own managed copy of the Framework: the rules in `knowledge/dev-framework/`, managed sections in its root README and AGENTS, and the workflow skills in `.agents/skills/`. `dev-doctor` puts them there, so any person or agent can read the rules and use the skills without this repository. See [skills/dev-framework/README.md](skills/dev-framework/README.md).
 
 Harness-specific settings stay in each harness's own configuration: themes, keybindings, models, authentication, Pi extensions, and Pi subagents.
 
@@ -42,8 +42,7 @@ agent-loadout/
     ├── dev-framework/   Framework source, no SKILL.md
     │   └── project/     Mirrors a project root; copied into Framework projects,
     │                    including the workflow skills in project/.agents/skills/
-    ├── dev-init/        Makes a repository a Framework project
-    ├── dev-update/      Updates a Framework project to this Framework
+    ├── dev-doctor/      Adopts, updates, and checks the Framework in a project
     ├── handoff/
     └── writing-for-agents/
 ```
