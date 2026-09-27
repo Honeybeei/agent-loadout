@@ -52,9 +52,17 @@ Every direct child of `skills/` is installed into the harness. The Framework's w
 
 ## Applying
 
-Applying copies or generates files only when the script runs; it does not link harness directories to this repository. Editing files or switching branches here does not affect any harness until the next apply. The script reports differences between the applied state and this repository, and removes skills it previously applied that no longer exist here.
+Applying copies or generates files only when the script runs; it does not link harness directories to this repository. Editing files or switching branches here does not affect any harness until the next apply.
 
-The apply script is not implemented yet.
+```bash
+bun run apply <pi | claude-code | all> --check   # show what would change
+bun run apply <pi | claude-code | all>           # apply it
+```
+
+- Skills: every direct child of `skills/`, without test files, goes into the harness's skills directory. Skills applied earlier but no longer in this repository are removed.
+- Global prompt: `prompt/common.md` plus `prompt/<harness>.md`, when it exists, goes into a section between `<!-- agent-loadout:start -->` and `<!-- agent-loadout:end -->`. Text outside the section stays as it is.
+- `.agent-loadout.json` in each skills directory records what was applied, so the script can tell repository changes from edits made in the harness. It refuses to overwrite such edits unless `--force` is given, and never touches a skill it did not apply, or `~/.claude/skills/synced/`.
+- Harness paths live in [scripts/harnesses.ts](scripts/harnesses.ts).
 
 ## Status
 
