@@ -16,6 +16,12 @@ The copy step also links `.claude/skills` to `../.agents/skills` in the project.
 
 `project/.agents/` is a hidden directory, so harnesses that scan this source for skills do not load the project skills from here.
 
+## Changing the Framework
+
+1. Edit the files here, then run `bun run lint`, `bun run typecheck`, and `bun run test` at the repository root.
+2. Apply to the harnesses: `bun run apply all`.
+3. Run `dev-update` in each Framework project. A project keeps its current Framework version until then.
+
 ## Scripts
 
 | Script | Runs in | Purpose |

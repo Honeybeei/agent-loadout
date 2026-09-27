@@ -80,7 +80,7 @@ status: <status>
 
 ## Record
 - Decided: <one-line gist> → <link to the owner>
-- Implemented: <what was done>, <evidence such as commits or test results>
+- Implemented (<blackbox or collaborative>): <what was done>, <evidence such as commits or test results>
 ```
 
 | Status | Stage block sections |
@@ -136,7 +136,22 @@ Record an answer as soon as the question is resolved:
 
 ## Map
 
-`plan/map.md` is generated from the node files. It shows the tree with each node's title, status, open question count, and dependencies, followed by the nodes that are possible now: unblocked `fog` and `exploring` nodes to explore, and unblocked `ready` nodes to implement.
+`plan/map.md` is generated from the node files. Run the map script from the project root:
 
+```bash
+bun .agents/skills/dev-framework/scripts/map.ts .           # check the Plan and write the map
+bun .agents/skills/dev-framework/scripts/map.ts . --check   # only report whether the map is stale
+```
+
+The map shows the tree with one line per node: its file name, title, status, open question count, and the dependencies it still waits for. Below the tree, "Now possible" lists:
+
+| Group | Nodes |
+| --- | --- |
+| Continue | `in_progress` nodes |
+| Close | `decomposed` nodes whose children are all `done` or `cancelled` |
+| Implement | Unblocked `ready` nodes |
+| Explore | Unblocked `fog` and `exploring` nodes |
+
+- The script writes no map while the Plan breaks the rules in this document; it lists the problems instead.
 - Regenerate the map after adding, removing, or renaming a node, after changing frontmatter, or after changing a node's open questions, since the map shows their count.
 - Never edit the map by hand. A map that may be stale is not current evidence; read the node files instead.

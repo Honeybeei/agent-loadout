@@ -43,9 +43,10 @@ Show one short proposal, then wait for the user's approval:
    | `knowledge/README.md` | A title and a line saying it indexes the project's Knowledge |
    | `plan/README.md` | How to read the Plan, with links to `map.md` and to the managed Plan documentation |
    | `plan/nodes/root.md` | A node with the agreed title and Goal, `parent: null`, `depends_on: []`, and `status: fog` |
+   | `README.md` | A short project introduction, only when the file is missing |
    | `.gitignore` | A `/.tmp/` line, if it is missing |
 
-3. Run sync, then generate the map. Sync also links `.claude/skills` to `../.agents/skills`, because Claude Code reads project skills only from `.claude/skills/`.
+3. Run sync, then generate the map. Sync adds the managed sections to `README.md` and `AGENTS.md`, creating `AGENTS.md` when it is missing. It also links `.claude/skills` to `../.agents/skills`, because Claude Code reads project skills only from `.claude/skills/`.
 
 ## 4. Finish
 
