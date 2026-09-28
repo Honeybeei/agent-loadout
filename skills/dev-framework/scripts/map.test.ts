@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -11,6 +12,8 @@ import { join } from "node:path";
 import {
   countOpenQuestions,
   loadPlan,
+  orderSteps,
+  renderHtml,
   renderMap,
 } from "../project/.agents/skills/dev-framework/scripts/map.ts";
 
@@ -98,7 +101,9 @@ describe("renderMap", () => {
       [
         "# Plan Map",
         "",
-        "Generated from `plan/nodes/` by `.agents/skills/dev-framework/scripts/map.ts`. Do not edit.",
+        "Generated from `plan/nodes/` by `.agents/skills/dev-framework/scripts/map.ts`. Do not edit. Open `.tmp/plan/map.html` in a browser for the full picture.",
+        "",
+        "Progress: 0 of 3 leaf nodes done (1 fog, 2 ready); 2 open questions",
         "",
         "```text",
         "root: Product — decomposed",
@@ -113,6 +118,13 @@ describe("renderMap", () => {
         "",
         "- Implement: [Setup](nodes/setup.md)",
         "- Explore: [Desktop](nodes/desktop.md), [Web](nodes/web.md)",
+        "",
+        "## Order",
+        "",
+        "Unfinished leaf nodes in dependency order. Nodes in one step do not wait for each other.",
+        "",
+        "1. [Setup](nodes/setup.md), [Web](nodes/web.md)",
+        "2. [Chat](nodes/chat.md)",
         "",
       ].join("\n"),
     );
@@ -142,6 +154,85 @@ describe("renderMap", () => {
       }),
     );
     expect(renderMap(plan)).toContain("- Close: [Product](nodes/root.md)");
+  });
+});
+
+describe("orderSteps", () => {
+  const ids = (root: string) =>
+    orderSteps(loadPlan(root)).map((step) => step.map((n) => n.id));
+
+  test("waiting for a parent means waiting for its unfinished leaves", () => {
+    const root = project({
+      ...sample,
+      launch: node({
+        title: "Launch",
+        parent: "root",
+        depends_on: ["apps"],
+        status: "fog",
+      }),
+    });
+    expect(ids(root)).toEqual([["setup", "web"], ["chat"], ["launch"]]);
+  });
+
+  test("leaves out finished nodes and the waits they end", () => {
+    const root = project({
+      ...sample,
+      setup: node({
+        title: "Setup",
+        parent: "desktop",
+        depends_on: [],
+        status: "done",
+      }),
+    });
+    expect(ids(root)).toEqual([["chat", "web"]]);
+  });
+
+  test("stops at a dependency cycle", () => {
+    const root = project({
+      root: sample.root,
+      a: node({ title: "A", parent: "root", depends_on: ["b"], status: "fog" }),
+      b: node({ title: "B", parent: "root", depends_on: ["a"], status: "fog" }),
+    });
+    expect(ids(root).flat().sort()).toEqual(["a", "b"]);
+  });
+});
+
+describe("renderHtml", () => {
+  const plan = () =>
+    loadPlan(
+      project({
+        ...sample,
+        setup: node(
+          {
+            title: "Setup <fast>",
+            parent: "desktop",
+            depends_on: [],
+            status: "ready",
+          },
+          "\n## Completion criteria\n- [x] Runs `bun`\n- [ ] See [the guide](../../knowledge/guide.md)\n",
+        ),
+      }),
+    );
+
+  test("shows progress, the work possible now, the order, and every node", () => {
+    const html = renderHtml(plan(), [
+      { commit: "abc1234", date: "2026-09-28", subject: "Explore the root" },
+    ]);
+    expect(html).toContain("0 of 3 leaf nodes done · 1 fog, 2 ready");
+    expect(html).toContain("1 of 2 criteria met");
+    expect(html).toContain('<body data-start="setup">');
+    expect(html).toContain("Step 2");
+    for (const id of ["root", "apps", "desktop", "chat", "setup", "web"])
+      expect(html).toContain(`data-detail="${id}"`);
+    expect(html).toContain("<code>abc1234</code> 2026-09-28 Explore the root");
+  });
+
+  test("escapes text and renders checkboxes, code, and link text", () => {
+    const html = renderHtml(plan());
+    expect(html).toContain("Setup &lt;fast&gt;");
+    expect(html).not.toContain("<fast>");
+    expect(html).toContain("☑ Runs <code>bun</code>");
+    expect(html).toContain("☐ See the guide");
   });
 });
 
@@ -280,13 +371,25 @@ describe("loadPlan problems", () => {
 });
 
 describe("command line", () => {
-  test("writes the map, then reports it is up to date", () => {
+  test("writes the map and the HTML view, then reports the map is up to date", () => {
     const root = project(sample);
-    expect(run(root).out).toContain("Wrote plan/map.md");
+    expect(run(root).out).toContain(
+      "Wrote plan/map.md\nWrote .tmp/plan/map.html",
+    );
+    expect(
+      readFileSync(join(root, ".tmp", "plan", "map.html"), "utf8"),
+    ).toStartWith("<!doctype html>");
     expect(run(root, "--check")).toMatchObject({ code: 0 });
     expect(readFileSync(join(root, "plan", "map.md"), "utf8")).toStartWith(
       "# Plan Map",
     );
+  });
+
+  test("--check writes nothing", () => {
+    const root = project(sample);
+    expect(run(root, "--check")).toMatchObject({ code: 1 });
+    expect(existsSync(join(root, "plan", "map.md"))).toBe(false);
+    expect(existsSync(join(root, ".tmp"))).toBe(false);
   });
 
   test("--check fails when the map is stale", () => {
@@ -317,5 +420,6 @@ describe("command line", () => {
     expect(result.code).toBe(1);
     expect(result.err).toContain("Plan problems:");
     expect(() => readFileSync(join(root, "plan", "map.md"))).toThrow();
+    expect(existsSync(join(root, ".tmp"))).toBe(false);
   });
 });

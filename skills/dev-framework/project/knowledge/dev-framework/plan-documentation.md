@@ -136,22 +136,30 @@ Record an answer as soon as the question is resolved:
 
 ## Map
 
-`plan/map.md` is generated from the node files. Run the map script from the project root:
+`plan/map.md` is generated from the node files, together with a browser view, `.tmp/plan/map.html`. Run the map script from the project root:
 
 ```bash
-bun .agents/skills/dev-framework/scripts/map.ts .           # check the Plan and write the map
+bun .agents/skills/dev-framework/scripts/map.ts .           # check the Plan, and write the map and the view
 bun .agents/skills/dev-framework/scripts/map.ts . --check   # only report whether the map is stale
 ```
 
-The map shows the tree with one line per node: its file name, title, status, open question count, and the dependencies it still waits for. Below the tree, "Now possible" lists:
+The map shows, in order:
 
-| Group | Nodes |
-| --- | --- |
-| Continue | `in_progress` nodes |
-| Close | `decomposed` nodes whose children are all `done` or `cancelled` |
-| Implement | Unblocked `ready` nodes |
-| Explore | Unblocked `fog` and `exploring` nodes |
+1. Progress: how many leaf nodes are done, out of all leaf nodes that are not `cancelled`; the unfinished ones by status; and the open question count. Leaf nodes are the units of work.
+2. The tree, with one line per node: its file name, title, status, open question count, and the dependencies it still waits for.
+3. "Now possible":
+
+   | Group | Nodes |
+   | --- | --- |
+   | Continue | `in_progress` nodes |
+   | Close | `decomposed` nodes whose children are all `done` or `cancelled` |
+   | Implement | Unblocked `ready` nodes |
+   | Explore | Unblocked `fog` and `exploring` nodes |
+
+4. "Order": the unfinished leaf nodes in numbered steps. A node comes one step after the latest work it waits for, and waiting for a parent means waiting for its unfinished leaves. Nodes in one step do not wait for each other.
+
+The view shows the same, plus each node's content, the Completion criteria met, and the latest commits that touched `plan/`. Selecting a node marks the work it waits for and the work that waits for it.
 
 - The script writes no map while the Plan breaks the rules in this document; it lists the problems instead.
-- Regenerate the map after adding, removing, or renaming a node, after changing frontmatter, or after changing a node's open questions, since the map shows their count.
-- Never edit the map by hand. A map that may be stale is not current evidence; read the node files instead.
+- Regenerate the map after adding, removing, or renaming a node, after changing frontmatter, or after changing a node's open questions, since the map shows their count. The view also shows node content, so regenerate before opening it.
+- Never edit the map or the view by hand. A map that may be stale is not current evidence; read the node files instead.

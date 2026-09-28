@@ -11,7 +11,7 @@ Keep it light: read the map and the nodes you recommend. Run no reviews and no s
 
 ## 1. Read the state
 
-- Regenerate the map if it may be stale, then read `plan/map.md`.
+- Regenerate the map, which also refreshes the browser view, then read `plan/map.md`.
 - Find what just happened: the result of the skill that called this one, or, when invoked alone, the last few commits and the newest Record lines.
 
 ## 2. Choose up to three recommendations
@@ -40,6 +40,8 @@ Just now: <one or two lines on what changed>
 Next
 1. Implement (blackbox): First-run setup, because it blocks Local chat
 2. Explore: Web service, the least clear part of MLP
+
+Full picture: .tmp/plan/map.html
 ```
 
 Give one line per recommendation, with its reason.
