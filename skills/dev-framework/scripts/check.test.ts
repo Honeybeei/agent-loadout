@@ -12,7 +12,7 @@ import {
   loadPlan,
   renderMap,
 } from "../project/.agents/skills/dev-framework/scripts/map.ts";
-import { type Area, diagnose } from "./check.ts";
+import { type Area, diagnose, hardWraps } from "./check.ts";
 import { planSync } from "./sync.ts";
 
 const CHECK = join(import.meta.dir, "check.ts");
@@ -57,7 +57,8 @@ const doc = (title: string, fields = "") =>
 function project(): string {
   const root = repository({
     "dev.yaml": "workspaces:\n  - .\n",
-    "README.md": "# Project\n",
+    "README.md":
+      "# Project\n\nRead [AGENTS](AGENTS.md), [Knowledge](knowledge/README.md), and [Plan](plan/README.md).\n",
     "knowledge/README.md": "# Knowledge\n",
     "plan/README.md": "# Plan\n\nRead the [map](map.md).\n",
     "plan/nodes/root.md": node("root", null, "fog"),
@@ -80,6 +81,7 @@ describe("state", () => {
     expect(diagnose(repository({ "README.md": "# Project\n" }))).toEqual({
       state: "not adopted",
       findings: [],
+      units: {},
     });
   });
 
@@ -90,21 +92,22 @@ describe("state", () => {
     });
     const { state } = diagnose(root);
     expect(state).toBe("not adopted");
-    expect(messages(root, "Structure")).toContain("CLAUDE.md exists");
-    expect(messages(root, "Managed material")).toContain(
+    expect(messages(root, "structure")).toContain("CLAUDE.md exists");
+    expect(messages(root, "managed")).toContain(
       "blocks sync: .claude/skills must be a link",
     );
   });
 
   test("an adopted project that follows the rules is current, with no findings", () => {
-    expect(diagnose(project())).toEqual({ state: "current", findings: [] });
+    const { state, findings } = diagnose(project());
+    expect({ state, findings }).toEqual({ state: "current", findings: [] });
   });
 
   test("changed managed material makes the project outdated", () => {
     const root = project();
     write(root, { ".agents/skills/grilling/SKILL.md": "edited\n" });
     expect(diagnose(root).state).toBe("outdated");
-    expect(messages(root, "Managed material")).toContain(
+    expect(messages(root, "managed")).toContain(
       "sync would replace .agents/skills/grilling",
     );
   });
@@ -112,17 +115,17 @@ describe("state", () => {
 
 describe("findings", () => {
   const cases: [string, Record<string, string>, Area, string][] = [
-    ["a CLAUDE.md", { "CLAUDE.md": "x\n" }, "Structure", "CLAUDE.md exists"],
+    ["a CLAUDE.md", { "CLAUDE.md": "x\n" }, "structure", "CLAUDE.md exists"],
     [
       "a nested AGENTS.md",
       { "docs/AGENTS.md": "x\n" },
-      "Structure",
+      "structure",
       "docs/AGENTS.md: AGENTS.md belongs only at the project root",
     ],
     [
       ".tmp/ missing from the root .gitignore",
       { ".gitignore": "" },
-      "Structure",
+      "structure",
       "the root .gitignore must exclude /.tmp/",
     ],
     [
@@ -131,13 +134,13 @@ describe("findings", () => {
         "dev.yaml": "workspaces:\n  - apps/web\n",
         "apps/web/main.ts": "",
       },
-      "Structure",
+      "structure",
       "workspace apps/web has no README.md",
     ],
     [
       "a missing workspace",
       { "dev.yaml": "workspaces:\n  - apps/web\n" },
-      "Structure",
+      "structure",
       "workspace apps/web does not exist",
     ],
     [
@@ -146,13 +149,13 @@ describe("findings", () => {
         "dev.yaml": "workspaces:\n  - .\n  - apps/web\n",
         "apps/web/README.md": "# Web\n",
       },
-      "Structure",
+      "structure",
       '"." must be the only workspace',
     ],
     [
       "a workspace in a reserved area",
       { "dev.yaml": "workspaces:\n  - plan/web\n" },
-      "Structure",
+      "structure",
       "workspace plan/web is inside a reserved area",
     ],
     [
@@ -162,37 +165,37 @@ describe("findings", () => {
         "apps/README.md": "# Apps\n",
         "apps/web/README.md": "# Web\n",
       },
-      "Structure",
+      "structure",
       "workspace apps/web is nested inside apps",
     ],
     [
       "an invalid Plan node",
       { "plan/nodes/next.md": node("next", "root", "todo") },
-      "Plan",
+      "plan",
       "next: status must be one of",
     ],
     [
       "a stale map",
       { "plan/nodes/next.md": node("next", "root", "fog") },
-      "Plan",
+      "plan",
       "plan/map.md is stale",
     ],
     [
       "Knowledge without canonical_for",
       { "knowledge/topic.md": "# Topic\n" },
-      "Knowledge",
+      "knowledge",
       "knowledge/topic.md: frontmatter needs canonical_for",
     ],
     [
       "a Knowledge file name that is not kebab-case",
       { "knowledge/My_Topic.md": doc("My topic") },
-      "Knowledge",
+      "knowledge",
       "knowledge/My_Topic.md: file name must be kebab-case",
     ],
     [
       "Knowledge with two H1 headings",
       { "knowledge/topic.md": `${doc("Topic")}\n# Another\n` },
-      "Knowledge",
+      "knowledge",
       "knowledge/topic.md: needs exactly one H1 heading, has 2",
     ],
     [
@@ -201,13 +204,13 @@ describe("findings", () => {
         "knowledge/topic.md": doc("Topic"),
         "knowledge/topic/part.md": doc("Part"),
       },
-      "Knowledge",
+      "knowledge",
       "knowledge/topic.md: subdocs does not list ./topic/part.md",
     ],
     [
       "subdocs that lists a missing document",
       { "knowledge/topic.md": doc("Topic", "subdocs:\n  - ./topic/gone.md\n") },
-      "Knowledge",
+      "knowledge",
       "knowledge/topic.md: subdocs lists ./topic/gone.md, which does not exist",
     ],
     [
@@ -218,25 +221,60 @@ describe("findings", () => {
         "apps/web/knowledge/README.md": "# Web Knowledge\n",
         "apps/web/knowledge/api.md": "# API\n",
       },
-      "Knowledge",
+      "knowledge",
       "apps/web/knowledge/api.md: frontmatter needs canonical_for",
     ],
     [
       "a broken link",
       { "knowledge/README.md": "# Knowledge\n\nSee [the topic](topic.md).\n" },
-      "Links",
+      "links",
       "knowledge/README.md: broken link to topic.md",
+    ],
+    [
+      "a topic with two owners",
+      {
+        "knowledge/deploy.md": doc("Deployment"),
+        "knowledge/ops.md": doc("deployment"),
+      },
+      "ssot",
+      '"Deployment" is in canonical_for of knowledge/deploy.md and knowledge/ops.md',
+    ],
+    [
+      "a topic that a Framework document owns",
+      { "knowledge/style.md": doc("Documentation style") },
+      "ssot",
+      '"Documentation style" is in canonical_for of knowledge/dev-framework/writing-rules.md and knowledge/style.md',
+    ],
+    [
+      "a link from Knowledge to .tmp/",
+      {
+        "knowledge/topic.md": `${doc("Topic")}\nSee [notes](../.tmp/notes.md).\n`,
+      },
+      "links",
+      "knowledge/topic.md: links to ../.tmp/notes.md in .tmp/",
+    ],
+    [
+      "Knowledge the root README does not reach",
+      { "knowledge/topic.md": doc("Topic") },
+      "links",
+      "knowledge/topic.md: not reachable from the root README",
+    ],
+    [
+      "hard-wrapped prose",
+      { "docs/guide.md": "# Guide\n\nThis sentence\nwraps.\n" },
+      "writing",
+      "docs/guide.md: hard-wrapped prose at line 3",
     ],
     [
       "an old plan/map.yaml",
       { "plan/map.yaml": "nodes: []\n" },
-      "Leftovers",
+      "leftovers",
       "plan/map.yaml is from an earlier Framework",
     ],
     [
       "an old Framework skill",
       { ".agents/skills/dev-cycle/SKILL.md": "x\n" },
-      "Leftovers",
+      "leftovers",
       ".agents/skills/dev-cycle is from an earlier Framework",
     ],
   ];
@@ -251,15 +289,13 @@ describe("findings", () => {
   test("reports a .claude/skills link that is not in Git", () => {
     const root = project();
     git(root, "rm", "-q", "--cached", ".claude/skills");
-    expect(messages(root, "Managed material")).toContain(
-      ".claude/skills is not in Git",
-    );
+    expect(messages(root, "managed")).toContain(".claude/skills is not in Git");
   });
 
   test("reports a missing required file", () => {
     const root = project();
     rmSync(join(root, "plan/README.md"));
-    expect(messages(root, "Structure")).toContain("plan/README.md is missing");
+    expect(messages(root, "structure")).toContain("plan/README.md is missing");
   });
 });
 
@@ -273,7 +309,7 @@ describe("no false findings", () => {
       ),
       "knowledge/topic/part.md": doc("Part"),
     });
-    expect(messages(root, "Knowledge")).toBe("");
+    expect(messages(root, "knowledge")).toBe("");
   });
 
   test("links in code, root-relative links, URLs, and anchors pass", () => {
@@ -282,16 +318,111 @@ describe("no false findings", () => {
       "knowledge/README.md":
         "# Knowledge\n\n```md\n[x](gone.md)\n```\n\n`[y](gone.md)` [Plan](/plan/README.md) [Web](https://example.com) [Top](#knowledge)\n",
     });
-    expect(messages(root, "Links")).toBe("");
+    expect(messages(root, "links")).toBe("");
+  });
+
+  test("Knowledge reached through a directory link and subdocs passes", () => {
+    const root = project();
+    write(root, {
+      "knowledge/README.md": "# Knowledge\n\nRead [the topic](topic.md).\n",
+      "knowledge/topic.md": doc("Topic", "subdocs:\n  - ./topic/part.md\n"),
+      "knowledge/topic/part.md": doc("Part"),
+      "README.md":
+        "# Project\n\n[AGENTS](AGENTS.md) [Knowledge](knowledge/) [Plan](plan/README.md)\n",
+    });
+    expect(messages(root, "links")).toBe("");
   });
 });
 
-test("the CLI exits 0 only for a current project without findings", () => {
-  const run = (root: string) => Bun.spawnSync(["bun", CHECK, root]);
-  const current = run(project());
-  expect(current.exitCode).toBe(0);
-  expect(current.stdout.toString()).toBe("State: current\nNo findings.\n");
-  const bare = run(repository());
-  expect(bare.exitCode).toBe(1);
-  expect(bare.stdout.toString()).toContain("State: not adopted");
+describe("hard wraps", () => {
+  test("finds the first line of each wrapped paragraph or list item", () => {
+    expect(
+      hardWraps("# T\n\nOne\ntwo\nthree\n\n- item\n  continues\n"),
+    ).toEqual([3, 7]);
+  });
+
+  test("ignores structure: frontmatter, code, lists, tables, HTML, and headings", () => {
+    const text = [
+      "---",
+      "canonical_for:",
+      "  - Topic",
+      "---",
+      "# Title",
+      "One paragraph.",
+      "",
+      "```text",
+      "code",
+      "lines",
+      "```",
+      "- one",
+      "- two",
+      "  - nested",
+      "1. first",
+      "",
+      "| a | b |",
+      "| --- | --- |",
+      "",
+      "<!-- start -->",
+      "## Section",
+      "<!-- end -->",
+      "",
+      "    indented",
+      "    code",
+    ].join("\n");
+    expect(hardWraps(text)).toEqual([]);
+  });
+});
+
+test("judgment units list nodes, topics, and maintained documents", () => {
+  const root = project();
+  write(root, { "knowledge/topic.md": doc("Topic") });
+  const { units } = diagnose(root);
+  expect(units.plan).toEqual(["plan/nodes/root.md"]);
+  expect(units.ssot).toEqual(["Topic: knowledge/topic.md"]);
+  expect(units.writing).toContain("knowledge/topic.md");
+  expect(units.writing).not.toContain("plan/map.md");
+  expect(units.writing).not.toContain("knowledge/dev-framework.md");
+});
+
+describe("CLI", () => {
+  const run = (...args: string[]) => Bun.spawnSync(["bun", CHECK, ...args]);
+
+  test("the diagnosis exits 0 only for a current project without findings", () => {
+    const current = run(project());
+    expect(current.exitCode).toBe(0);
+    expect(current.stdout.toString()).toBe(
+      "State: current\n\nGroups\n- structure: 0\n- plan: 0\n- knowledge: 0\n- ssot: 0\n- links: 0\n- writing: 0\n- leftovers: 0\n",
+    );
+    const bare = run(repository());
+    expect(bare.exitCode).toBe(1);
+    expect(bare.stdout.toString()).toContain("State: not adopted");
+  });
+
+  test("an outdated project shows managed material without group counts", () => {
+    const root = project();
+    write(root, { ".agents/skills/grilling/SKILL.md": "edited\n" });
+    const out = run(root).stdout.toString();
+    expect(out).toContain("Managed material\n");
+    expect(out).toContain("- sync would replace .agents/skills/grilling\n");
+    expect(out).not.toContain("Groups");
+  });
+
+  test("--group prints the findings and judgment units of the groups", () => {
+    const root = project();
+    write(root, { "docs/guide.md": "# Guide\n\nOne\ntwo\n" });
+    const result = run(root, "--group", "plan,writing");
+    expect(result.exitCode).toBe(1);
+    const out = result.stdout.toString();
+    expect(out).toContain(
+      "plan: 0 findings\nJudgment units: 1\n- plan/nodes/root.md\n",
+    );
+    expect(out).toContain(
+      "writing: 1 findings\n- docs/guide.md: hard-wrapped prose at line 3\n",
+    );
+    expect(run(root, "--group", "structure").exitCode).toBe(0);
+  });
+
+  test("rejects an unknown group", () => {
+    expect(run(project(), "--group", "style").exitCode).toBe(2);
+  });
 });
