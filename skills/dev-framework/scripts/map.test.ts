@@ -116,7 +116,7 @@ describe("renderMap", () => {
         "",
         "## Now possible",
         "",
-        "- Implement: [Setup](nodes/setup.md)",
+        "- Dispatch: [Setup](nodes/setup.md)",
         "- Explore: [Desktop](nodes/desktop.md), [Web](nodes/web.md)",
         "",
         "## Order",
@@ -128,6 +128,29 @@ describe("renderMap", () => {
         "",
       ].join("\n"),
     );
+  });
+
+  test("lists dispatched nodes as running, apart from the work possible now", () => {
+    const plan = loadPlan(
+      project({
+        ...sample,
+        setup: node({
+          title: "Setup",
+          parent: "desktop",
+          depends_on: [],
+          status: "in_progress",
+        }),
+      }),
+    );
+    const map = renderMap(plan);
+    expect(map).toContain(
+      "## Running\n\nDispatched to implementation sessions; review each when its report arrives.\n\n- [Setup](nodes/setup.md)\n\n## Now possible",
+    );
+    expect(map).not.toContain("Dispatch: [Setup]");
+    expect(renderMap(loadPlan(project(sample)))).not.toContain("## Running");
+    const html = renderHtml(plan);
+    expect(html).toContain("<h2>Running</h2>");
+    expect(html).toContain('<body data-start="desktop">');
   });
 
   test("lists a decomposed node whose children are finished as closable", () => {

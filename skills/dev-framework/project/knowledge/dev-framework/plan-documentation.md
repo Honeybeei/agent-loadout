@@ -9,7 +9,7 @@ managed_by: dev-framework
 
 # Plan Documentation
 
-This document defines how a project's Plan is stored, how a node moves from an unclear area to finished work, and what each node document contains. What belongs in Plan rather than Knowledge is defined in [Knowledge documentation](knowledge-documentation.md#what-knowledge-holds).
+This document defines how a project's Plan is stored, how a node moves from an unclear area to finished work, and what each node document contains. What belongs in Plan rather than Knowledge is defined in [Knowledge documentation](knowledge-documentation.md#what-knowledge-holds). Only the main flow edits the Plan, as [Development workflow](workflow.md) says.
 
 ## Layout
 
@@ -38,17 +38,20 @@ plan/
 ## Lifecycle and status
 
 ```text
-fog ──explore──→ exploring ──explore──┬─→ decomposed: split into child nodes, each with its own lifecycle
-                                      └─→ ready ──implement──→ in_progress ──→ done
+fog ──explore──→ exploring ──explore──┬─→ decomposed ──close──→ done
+                     ↑                └─→ ready ──dispatch──→ in_progress ──review──→ done
+                     └──────────────────── reopen ─────────────────┘
 ```
+
+A `decomposed` node splits its work into child nodes, each with its own lifecycle.
 
 | Status | Meaning | Next action |
 | --- | --- | --- |
 | `fog` | The area is known, but its goal cannot be stated clearly yet | Explore |
 | `exploring` | The goal is clear, and the node has open questions | Explore |
-| `decomposed` | No open questions at this level; child nodes carry the work | Close when children finish and the criteria hold |
-| `ready` | A leaf clear enough to implement | Implement |
-| `in_progress` | Being implemented | — |
+| `decomposed` | No open questions at this level; child nodes carry the work | Close with review when the children finish and the criteria hold |
+| `ready` | A leaf clear enough to implement | Dispatch |
+| `in_progress` | Dispatched: an implementation session is building it in its worktree | Review when its report arrives |
 | `done` | Completion criteria met, and the user approved | — |
 | `cancelled` | Dropped or out of scope; the reason is in Record | — |
 
@@ -80,7 +83,10 @@ status: <status>
 
 ## Record
 - Decided: <one-line gist> → <link to the owner>
-- Implemented (<blackbox or collaborative>): <what was done>, <evidence such as commits or test results>
+- Dispatched (<blackbox or collaborative>): impl/<node>
+- Implemented (<mode>): <what was done>, <evidence such as checks and the merge>
+- Reopened: <why the implementation stopped>, <what it found>
+- Closed: <how the children were verified together>, <evidence>
 ```
 
 | Status | Stage block sections |
@@ -133,6 +139,7 @@ Record an answer as soon as the question is resolved:
 - An answer the user gives is an approved decision. An agent's proposal stays an open question until the user confirms it.
 - Keep Record lines short. The detail lives in one owner, and Record links to it.
 - Keep failed attempts and cancelled work in Record; they explain later choices.
+- Each resolved question is its own commit, offered once it is recorded, as [Git workflow](git-workflow.md#commits) says.
 
 ## Map
 
@@ -147,16 +154,16 @@ The map shows, in order:
 
 1. Progress: how many leaf nodes are done, out of all leaf nodes that are not `cancelled`; the unfinished ones by status; and the open question count. Leaf nodes are the units of work.
 2. The tree, with one line per node: its file name, title, status, open question count, and the dependencies it still waits for.
-3. "Now possible":
+3. "Running", when any node is `in_progress`: the dispatched nodes. They belong to their implementation sessions; the main flow reviews them when their reports arrive.
+4. "Now possible":
 
    | Group | Nodes |
    | --- | --- |
-   | Continue | `in_progress` nodes |
    | Close | `decomposed` nodes whose children are all `done` or `cancelled` |
-   | Implement | Unblocked `ready` nodes |
+   | Dispatch | Unblocked `ready` nodes |
    | Explore | Unblocked `fog` and `exploring` nodes |
 
-4. "Order": the unfinished leaf nodes in numbered steps. A node comes one step after the latest work it waits for, and waiting for a parent means waiting for its unfinished leaves. Nodes in one step do not wait for each other.
+5. "Order": the unfinished leaf nodes in numbered steps. A node comes one step after the latest work it waits for, and waiting for a parent means waiting for its unfinished leaves. Nodes in one step do not wait for each other.
 
 The view shows the same, plus each node's content, the Completion criteria met, and the latest commits that touched `plan/`. Selecting a node marks the work it waits for and the work that waits for it.
 
