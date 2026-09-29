@@ -18,3 +18,7 @@ Unit: one node file.
 | The stage block has the sections the node's status requires, in order, and none from another stage | [Node format](../../../dev-framework/project/knowledge/dev-framework/plan-documentation.md#node-format) |
 | Record lines stay short and link to the owner of the detail instead of repeating it | [Recording resolved questions](../../../dev-framework/project/knowledge/dev-framework/plan-documentation.md#recording-resolved-questions) |
 | The node holds no Knowledge content: a rule, design, or fact that stays valid after the work belongs in Knowledge, linked from a Decided line | [What Knowledge holds](../../../dev-framework/project/knowledge/dev-framework/knowledge-documentation.md#what-knowledge-holds) |
+
+## Dispatched nodes
+
+An `in_progress` node belongs to its implementation session, and the main flow does not edit it until review merges or reopens it, as [Development workflow](../../../dev-framework/project/knowledge/dev-framework/workflow.md#flows-and-sessions) says. Report its findings, script or judgment, and propose their fixes for after that point.
