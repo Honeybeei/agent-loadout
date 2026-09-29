@@ -61,14 +61,14 @@ Propose what the reference describes in one short list, and wait for approval.
 
 ## 5. Apply
 
-1. On `main`, create the branch before the first write: the one the reference names, or `work/conform-to-dev-framework` for check fixes. On another branch, say in the proposal which branch the changes go to.
+1. Work on the current branch, normally `main`, and create no other branch. On a branch other than `main`, say in the proposal which branch the changes go to.
 2. Apply only what the user approved.
 3. Run the diagnosis, or the script checks of the groups you fixed, again. When findings remain that the approval did not cover, return to step 4 with them.
-4. Show a short summary of the changes, and ask whether to commit. Include all Framework-managed material, including the `.claude/skills` link. Merge only when the user asks.
+4. Show a short summary of the changes and the commit message, and ask whether to commit: the message the reference names, or `chore: conform to the Dev Framework` for check fixes. Include all Framework-managed material, including the `.claude/skills` link.
 5. Return to step 1, which leads to the menu with the remaining counts. When the user is done, follow the project's copy of `dev-next` at `.agents/skills/dev-next/SKILL.md`.
 
 ## Authority
 
 | Before approval | After approval | Always separate |
 | --- | --- | --- |
-| Reading, including subagents; the check script, sync with `--check`, the map script with `--check` | The approved changes only | Commits, merges, pushes; moving or deleting project files the proposal did not name |
+| Reading, including subagents; the check script, sync with `--check`, the map script with `--check` | The approved changes only | Commits, pushes; moving or deleting project files the proposal did not name |

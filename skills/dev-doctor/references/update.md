@@ -6,11 +6,12 @@ Bring a Framework project up to the installed Framework. Sync replaces managed m
 
 - Show what sync would change: the `Managed material` findings.
 - When sync is blocked, show how to clear each problem: commit or stash the listed changes, move skills out of a real `.claude/skills/` directory into `.agents/skills/`, or repair the section markers.
+- List `in_progress` nodes without a `Dispatched` Record line: an earlier Framework implemented them in place. Recommend finishing and merging each on its old branch before the update, or setting it back to `ready` after the update so it can be dispatched.
 - Say that the check menu follows the update, because the checks read the project's copy of the rules.
 
 ## Apply
 
-Branch: `work/update-dev-framework` from `main`. When the project's latest records are on a work branch not yet merged, branch from that one instead, and say so.
+Run on `main` in the main checkout. When `impl/*` branches exist, implementations are running under the current rules: recommend updating after they are merged, and continue only when the user agrees. Commit message: `chore: update the Dev Framework`.
 
 1. Run sync, then the map script. The map script may refuse records in an earlier format; the next step handles them.
 2. Return to the diagnosis, which offers the check groups. Records written for an earlier Framework often need migration; when the checks report them, fix them this way:

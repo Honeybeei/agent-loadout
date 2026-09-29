@@ -13,7 +13,7 @@ This document defines the root layout of a Framework project, its workspaces, an
 
 ## Project root
 
-The agent's session cwd, the project root, and the Git worktree top-level directory (`git rev-parse --show-toplevel`) are the same directory. Linked worktrees are supported; each uses its own top-level directory as its project root.
+The agent's session cwd, the project root, and the Git worktree top-level directory (`git rev-parse --show-toplevel`) are the same directory. Linked worktrees are supported; each uses its own top-level directory as its project root. Implementation worktrees live outside the main checkout, as [Git workflow](git-workflow.md#worktrees) says.
 
 ## Root layout
 
@@ -72,10 +72,10 @@ Rules:
 
 ## Temporary material
 
-Root `.tmp/` holds temporary material such as research notes, drafts, experiment output, and handoffs.
+Root `.tmp/` holds temporary material such as research notes, prototypes, drafts, experiment output, handoffs, and the Plan's browser view. Sessions also pass records to each other through it: implementation reports and review findings, as [Development workflow](workflow.md#writing-across-sessions) says.
 
 - Git must exclude it with `/.tmp/` in `.gitignore`.
-- Use one subdirectory per purpose, such as `.tmp/handoffs/` or `.tmp/research/<topic>/`.
+- Use one subdirectory per purpose, such as `.tmp/research/<topic>/`, `.tmp/reports/`, `.tmp/reviews/`, or `.tmp/handoffs/`.
 - Knowledge and Plan must not link to or depend on `.tmp/`. Move needed conclusions into them so they stay understandable after `.tmp/` is deleted.
 - Delete only material you created, and only after its conclusions are preserved. Report material of unclear origin instead of deleting it. Do not follow symlinks when deleting.
 
@@ -89,7 +89,7 @@ The Framework adds the following to a project and replaces them when the project
 | `knowledge/dev-framework/` | The Framework rules, including this document |
 | Section in root `README.md` | Points readers to the Framework rules |
 | Section in root `AGENTS.md` | Tells agents what to read before working |
-| `.agents/skills/dev-explore/`, `dev-implement/`, `dev-next/` | The Framework's workflow skills |
+| `.agents/skills/dev-next/`, `dev-explore/`, `dev-dispatch/`, `dev-implement/`, `dev-review/` | The Framework's workflow skills |
 | `.agents/skills/grilling/`, `research/`, `prototype/` | Skills the workflow skills use |
 | `.agents/skills/dev-framework/` | Scripts the workflow skills use |
 | `.claude/skills` | Link to `../.agents/skills` |

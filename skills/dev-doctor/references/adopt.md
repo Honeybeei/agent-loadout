@@ -16,7 +16,7 @@ Make a repository without `dev.yaml` a Framework project. Before proposing, read
 
 ## Apply
 
-Branch: `work/adopt-dev-framework`, when the repository has commits.
+Commit message: `chore: adopt the Dev Framework`.
 
 1. Create each missing project file, and keep every existing one:
 

@@ -7,6 +7,7 @@ subdocs:
   - ./dev-framework/project-structure.md
   - ./dev-framework/knowledge-documentation.md
   - ./dev-framework/readme-agents-guideline.md
+  - ./dev-framework/workflow.md
   - ./dev-framework/git-workflow.md
   - ./dev-framework/plan-documentation.md
 ---
@@ -21,5 +22,6 @@ This project follows the Dev Framework, a method for managing a software project
 | [Project structure](dev-framework/project-structure.md) | Changing the root layout, workspaces, temporary material, or Framework-managed material |
 | [Knowledge documentation](dev-framework/knowledge-documentation.md) | Creating, editing, or reorganizing Knowledge documents |
 | [README and AGENTS guideline](dev-framework/readme-agents-guideline.md) | Creating or editing a README or the root `AGENTS.md` |
+| [Development workflow](dev-framework/workflow.md) | Exploring, dispatching, implementing, or reviewing Plan work, or passing records between sessions |
 | [Git workflow](dev-framework/git-workflow.md) | Choosing branches or worktrees, committing, merging, pushing, or cleaning up |
 | [Plan documentation](dev-framework/plan-documentation.md) | Reading or changing the Plan: nodes, their status, or the map |

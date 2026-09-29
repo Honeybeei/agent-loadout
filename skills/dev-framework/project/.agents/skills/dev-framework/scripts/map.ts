@@ -213,20 +213,23 @@ const summary = (node: PlanNode) =>
     ? `${node.status}, ${plural(node.openQuestions, "open question")}`
     : node.status;
 
-/** The "Now possible" groups, in the order dev-next takes them. */
+/** Dispatched nodes, which belong to their implementation sessions. */
+const running = (plan: Plan) =>
+  treeOrder(checkedRoot(plan)).filter((n) => n.status === "in_progress");
+
+/** The "Now possible" groups of the main flow, in the order dev-next takes them. */
 function possibleWork(plan: Plan): [string, PlanNode[]][] {
   const order = treeOrder(checkedRoot(plan));
   const unblocked = (node: PlanNode) =>
     waitingFor(node, plan.nodes).length === 0;
   const groups: [string, PlanNode[]][] = [
-    ["Continue", order.filter((n) => n.status === "in_progress")],
     [
       "Close",
       order.filter(
         (n) => n.status === "decomposed" && n.children.every(finished),
       ),
     ],
-    ["Implement", order.filter((n) => n.status === "ready" && unblocked(n))],
+    ["Dispatch", order.filter((n) => n.status === "ready" && unblocked(n))],
     [
       "Explore",
       order.filter(
@@ -325,6 +328,7 @@ export function renderMap(plan: Plan): string {
   const steps = orderSteps(plan).map(
     (group, index) => `${index + 1}. ${group.map(link).join(", ")}`,
   );
+  const dispatched = running(plan);
 
   return [
     "# Plan Map",
@@ -337,6 +341,16 @@ export function renderMap(plan: Plan): string {
     ...tree,
     "```",
     "",
+    ...(dispatched.length > 0
+      ? [
+          "## Running",
+          "",
+          "Dispatched to implementation sessions; review each when its report arrives.",
+          "",
+          ...dispatched.map((node) => `- ${link(node)}`),
+          "",
+        ]
+      : []),
     "## Now possible",
     "",
     ...(possible.length > 0
@@ -540,6 +554,7 @@ export function renderHtml(plan: Plan, changes: Change[] = []): string {
   const root = checkedRoot(plan);
   const order = treeOrder(root);
   const possible = possibleWork(plan);
+  const dispatched = running(plan);
   const { done, total, open, questions } = progress(plan);
   const met = order.reduce((sum, n) => sum + criteria(n).met, 0);
   const allCriteria = order.reduce((sum, n) => sum + criteria(n).total, 0);
@@ -593,6 +608,13 @@ ${body}
 <p>${done} of ${plural(total, "leaf node")} done${open.length > 0 ? ` · ${escapeHtml(open.join(", "))}` : ""} · ${plural(questions, "open question")} · ${met} of ${allCriteria} criteria met</p>
 </header>
 <main>
+${
+  dispatched.length > 0
+    ? `<h2>Running</h2>
+<p class="muted">Dispatched to implementation sessions; review each when its report arrives.</p>
+<ul class="possible">${dispatched.map((n) => `<li>${card(n)}</li>`).join("")}</ul>`
+    : ""
+}
 <h2>Now possible</h2>
 ${
   possible.length > 0

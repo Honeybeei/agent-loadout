@@ -47,7 +47,7 @@ agent-loadout/
     └── writing-for-agents/
 ```
 
-Every direct child of `skills/` is installed into the harness. The Framework's workflow skills (`dev-explore`, `dev-implement`, `dev-next`) and the skills they use (`grilling`, `research`, `prototype`) are not; they live in each Framework project, where they match that project's version of the rules.
+Every direct child of `skills/` is installed into the harness. The Framework's workflow skills (`dev-next`, `dev-explore`, `dev-dispatch`, `dev-implement`, `dev-review`) and the skills they use (`grilling`, `research`, `prototype`) are not; they live in each Framework project, where they match that project's version of the rules.
 
 ## Applying
 
