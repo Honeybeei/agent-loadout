@@ -4,7 +4,7 @@ Agent Loadout is the single source of truth for the material that every developm
 
 ## Why
 
-Pi is not tied to one inference provider, while a Claude subscription can be used only inside Claude Code. Keeping shared material here, instead of inside one harness's configuration, gives both harnesses identical skills, and every Framework project the same rules.
+Pi is not tied to one inference provider, while a Claude subscription can be used only inside Claude Code. Keeping shared material here, instead of inside one harness's configuration, gives every harness identical skills, and every Framework project the same rules.
 
 ## Scope
 
@@ -24,8 +24,9 @@ Harness-specific settings stay in each harness's own configuration: themes, keyb
 | --- | --- | --- |
 | Pi | `~/.agents/skills/<name>/` | `~/.pi/agent/AGENTS.md` |
 | Claude Code | `~/.claude/skills/<name>/` | `~/.claude/CLAUDE.md` |
+| Codex | `~/.agents/skills/<name>/`, shared with Pi | `$CODEX_HOME/AGENTS.md`, by default `~/.codex/AGENTS.md` |
 
-Codex also reads `~/.agents/skills/`, so it receives the Pi skill copies without being an official target. Another harness can be added later with an entry in [scripts/harnesses.ts](scripts/harnesses.ts).
+Pi and Codex read the same skills directory, so applying either one updates the skills both use. Codex reads `AGENTS.override.md` instead of `AGENTS.md` when it is not empty; the apply script warns when that hides the prompt section. Another harness can be added later with an entry in [scripts/harnesses.ts](scripts/harnesses.ts).
 
 ## Layout
 
@@ -57,13 +58,13 @@ agent-loadout/
 Applying copies or generates files only when the script runs; it does not link harness directories to this repository. Editing files or switching branches here does not affect any harness until the next apply.
 
 ```bash
-bun run apply <pi | claude-code | all> --check   # show what would change
-bun run apply <pi | claude-code | all>           # apply it
+bun run apply <pi | claude-code | codex | all> --check   # show what would change
+bun run apply <pi | claude-code | codex | all>           # apply it
 ```
 
 - Skills: every direct child of `skills/`, without test files, goes into the harness's skills directory. Skills applied earlier but no longer in this repository are removed.
 - Global prompt: `prompt/common.md` plus `prompt/<harness>.md`, when it exists, goes into a section between `<!-- agent-loadout:start -->` and `<!-- agent-loadout:end -->`. Text outside the section stays as it is.
-- `.agent-loadout.json` in each skills directory records what was applied, so the script can tell repository changes from edits made in the harness. It refuses to overwrite such edits unless `--force` is given, and never touches a skill it did not apply, or `~/.claude/skills/synced/`.
+- `.agent-loadout.json` in each skills directory records what was applied, including the prompt section of each harness that reads the directory, so the script can tell repository changes from edits made in the harness. It refuses to overwrite such edits unless `--force` is given, and never touches a skill it did not apply, or `~/.claude/skills/synced/`.
 - Harness paths live in [scripts/harnesses.ts](scripts/harnesses.ts).
 
 ## Sources

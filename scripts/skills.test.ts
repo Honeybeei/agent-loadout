@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
 import { REPO } from "./apply.ts";
 
 // Harnesses skip a skill whose frontmatter is not valid YAML, often with only a warning.
@@ -38,5 +38,20 @@ for (const file of files) {
     expect(typeof fields.description).toBe("string");
     expect((fields.description as string).length).toBeGreaterThan(20);
     expect((fields.description as string).length).toBeLessThanOrEqual(1024);
+  });
+
+  // Codex ignores disable-model-invocation and reads its own policy file instead.
+  test(`${relative(REPO, file)} is explicit-only in Codex exactly when it is user-invoked`, () => {
+    const text = readFileSync(file, "utf8");
+    const userInvoked = /^disable-model-invocation: true$/m.test(text);
+    const policy = join(dirname(file), "agents", "openai.yaml");
+    const implicit = existsSync(policy)
+      ? (
+          Bun.YAML.parse(readFileSync(policy, "utf8")) as {
+            policy?: { allow_implicit_invocation?: boolean };
+          }
+        ).policy?.allow_implicit_invocation
+      : undefined;
+    expect(implicit === false).toBe(userInvoked);
   });
 }

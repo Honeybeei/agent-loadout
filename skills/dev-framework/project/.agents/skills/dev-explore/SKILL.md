@@ -35,7 +35,7 @@ Work the open questions in the target's subtree, leaving dispatched nodes alone.
 
 | Tag | How to resolve |
 | --- | --- |
-| `research` | Run a subagent per question by [research](../research/SKILL.md), in parallel when there are several. Keep raw notes in `.tmp/research/<topic>.md`. |
+| `research` | Run a subagent per question by [research](../research/SKILL.md), in parallel when there are several; without subagents, research each question in turn. Keep raw notes in `.tmp/research/<topic>.md`. |
 | `grilling` | Follow [grilling](../grilling/SKILL.md). Only the user answers. |
 | `prototype` | Follow [prototype](../prototype/SKILL.md). Build in `.tmp/prototypes/<name>/`, or on a `prototype/<name>` branch when it must run inside the app. The user makes the choice it informs. |
 | `task` | Do the work when allowed below; otherwise give the user a precise checklist. |

@@ -15,7 +15,7 @@ Review a `completed` implementation, then either send findings back, or merge it
 
 ## Review
 
-1. Review the change with subagents in parallel, each with a fresh context and read-only access. They compare `git diff main...impl/<node>` with the node's Completion criteria, Out of scope, and Relies on, with the project's rules, and with the report's Deviations and Uncertain parts. One of them checks that the report's evidence matches the diff.
+1. Review the change with subagents in parallel, each with a fresh context and read-only access. They compare `git diff main...impl/<node>` with the node's Completion criteria, Out of scope, and Relies on, with the project's rules, and with the report's Deviations and Uncertain parts. One of them checks that the report's evidence matches the diff. Without subagents, make the same comparisons yourself, one part at a time.
 2. Merge their results. Show the user a summary of the report in the user's language, the findings with their severity, and a recommendation.
 
 ## Send findings back
