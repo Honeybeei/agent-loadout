@@ -144,6 +144,40 @@ describe("apply", () => {
     expect(read(root, ".claude/skills/synced/note.md")).toBe("claude.ai\n");
   });
 
+  test("gives Codex the prompt section and the skills it shares with Pi", () => {
+    const root = home();
+    expect(apply(root, "codex").code).toBe(0);
+    expect(read(root, ".codex/AGENTS.md")).toStartWith(START);
+    expect(existsSync(join(root, ".agents/skills/dev-doctor/SKILL.md"))).toBe(
+      true,
+    );
+    const manifest = JSON.parse(
+      read(root, ".agents/skills/.agent-loadout.json"),
+    );
+    expect(Object.keys(manifest.prompts)).toEqual(["codex"]);
+  });
+
+  test("plans a shared skills directory once, so a second apply changes nothing", () => {
+    const root = home();
+    const first = apply(root, "all");
+    expect(first.code).toBe(0);
+    expect(first.out).toContain("pi, codex:");
+    const manifest = JSON.parse(
+      read(root, ".agents/skills/.agent-loadout.json"),
+    );
+    expect(Object.keys(manifest.prompts).sort()).toEqual(["codex", "pi"]);
+    const again = apply(root, "all", "--check");
+    expect(again.code).toBe(0);
+    expect(again.out).not.toContain("would");
+  });
+
+  test("warns when a Codex override file hides the prompt section", () => {
+    const root = home({ ".codex/AGENTS.override.md": "# Override\n" });
+    expect(apply(root, "codex").out).toContain(
+      "AGENTS.override.md is not empty, so codex reads it instead",
+    );
+  });
+
   test("warns when an older Pi skill directory hides an applied skill", () => {
     const root = home({ ".pi/agent/skills/handoff/SKILL.md": "old\n" });
     expect(apply(root, "pi").out).toContain("hides the applied handoff");

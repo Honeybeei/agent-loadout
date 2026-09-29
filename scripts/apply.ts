@@ -1,5 +1,5 @@
 // Installs this repository's skills and global prompt into each harness, or reports what would change.
-// Usage: bun scripts/apply.ts <pi | claude-code | all> [--check] [--force]
+// Usage: bun scripts/apply.ts <pi | claude-code | codex | all> [--check] [--force]
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -32,8 +32,9 @@ export interface Step {
   description: string;
   apply: () => void;
 }
-export interface HarnessPlan {
-  harness: Harness;
+/** The changes to one skills directory and to the prompts of the harnesses that read it. */
+export interface TargetPlan {
+  harnesses: Harness[];
   steps: Step[];
   problems: string[];
   warnings: string[];
@@ -148,8 +149,8 @@ function sourceState(): { commit: string; dirty: boolean } {
   };
 }
 
-function readManifest(harness: Harness): Manifest {
-  const path = join(harness.skillsDir, MANIFEST);
+function readManifest(skillsDir: string): Manifest {
+  const path = join(skillsDir, MANIFEST);
   if (!existsSync(path)) return { skills: {}, prompts: {} };
   const manifest = JSON.parse(readFileSync(path, "utf8")) as Partial<Manifest>;
   return {
@@ -167,15 +168,19 @@ function writeTree(directory: string, tree: Tree): void {
   }
 }
 
-export function planHarness(harness: Harness, force: boolean): HarnessPlan {
-  const plan: HarnessPlan = {
-    harness,
+export function planTarget(
+  skillsDir: string,
+  group: Harness[],
+  force: boolean,
+): TargetPlan {
+  const plan: TargetPlan = {
+    harnesses: group,
     steps: [],
     problems: [],
     warnings: [],
     unchanged: 0,
   };
-  const manifest = readManifest(harness);
+  const manifest = readManifest(skillsDir);
   const next: Manifest = {
     source: sourceState(),
     skills: { ...manifest.skills },
@@ -194,14 +199,12 @@ export function planHarness(harness: Harness, force: boolean): HarnessPlan {
 
   const skills = sourceSkills();
   for (const [name, tree] of skills) {
-    const target = join(harness.skillsDir, name);
-    if (harness.reserved.includes(name)) {
-      plan.problems.push(
-        `skill name "${name}" is reserved in ${harness.skillsDir}`,
-      );
+    const target = join(skillsDir, name);
+    if (group.some((harness) => harness.reserved.includes(name))) {
+      plan.problems.push(`skill name "${name}" is reserved in ${skillsDir}`);
       continue;
     }
-    for (const shadow of harness.shadowDirs)
+    for (const shadow of group.flatMap((harness) => harness.shadowDirs))
       if (existsSync(join(shadow, name)))
         plan.warnings.push(
           `${join(shadow, name)} is read first and hides the applied ${name}`,
@@ -233,7 +236,7 @@ export function planHarness(harness: Harness, force: boolean): HarnessPlan {
   for (const name of Object.keys(manifest.skills)) {
     if (skills.has(name)) continue;
     delete next.skills[name];
-    const target = join(harness.skillsDir, name);
+    const target = join(skillsDir, name);
     if (!existsSync(target)) continue;
     if (edited(name, hashes(readTree(target)))) refuseEdit(target);
     plan.steps.push({
@@ -242,45 +245,55 @@ export function planHarness(harness: Harness, force: boolean): HarnessPlan {
     });
   }
 
-  const block = promptSection(harness);
-  next.prompts[harness.name] = sha(block);
-  const current = existsSync(harness.promptPath)
-    ? readFileSync(harness.promptPath, "utf8")
-    : undefined;
-  try {
-    const section = current === undefined ? undefined : findSection(current);
-    const installed =
-      current !== undefined && section
-        ? sectionText(current, section)
-        : undefined;
-    if (installed === block) plan.unchanged++;
-    else {
-      const applied = manifest.prompts[harness.name];
-      if (
-        installed !== undefined &&
-        applied !== undefined &&
-        sha(installed) !== applied
-      )
-        refuseEdit(`the prompt section in ${harness.promptPath}`);
-      plan.steps.push({
-        description: `${installed === undefined ? "add" : "update"} the prompt section in ${harness.promptPath}`,
-        apply: () => {
-          mkdirSync(dirname(harness.promptPath), { recursive: true });
-          writeFileSync(harness.promptPath, replaceSection(current, block));
-        },
-      });
+  for (const harness of group) {
+    if (
+      harness.promptOverride !== undefined &&
+      existsSync(harness.promptOverride) &&
+      readFileSync(harness.promptOverride, "utf8").trim() !== ""
+    )
+      plan.warnings.push(
+        `${harness.promptOverride} is not empty, so ${harness.name} reads it instead of the prompt section in ${harness.promptPath}`,
+      );
+    const block = promptSection(harness);
+    next.prompts[harness.name] = sha(block);
+    const current = existsSync(harness.promptPath)
+      ? readFileSync(harness.promptPath, "utf8")
+      : undefined;
+    try {
+      const section = current === undefined ? undefined : findSection(current);
+      const installed =
+        current !== undefined && section
+          ? sectionText(current, section)
+          : undefined;
+      if (installed === block) plan.unchanged++;
+      else {
+        const applied = manifest.prompts[harness.name];
+        if (
+          installed !== undefined &&
+          applied !== undefined &&
+          sha(installed) !== applied
+        )
+          refuseEdit(`the prompt section in ${harness.promptPath}`);
+        plan.steps.push({
+          description: `${installed === undefined ? "add" : "update"} the prompt section in ${harness.promptPath}`,
+          apply: () => {
+            mkdirSync(dirname(harness.promptPath), { recursive: true });
+            writeFileSync(harness.promptPath, replaceSection(current, block));
+          },
+        });
+      }
+    } catch (error) {
+      plan.problems.push(`${harness.promptPath}: ${(error as Error).message}`);
     }
-  } catch (error) {
-    plan.problems.push(`${harness.promptPath}: ${(error as Error).message}`);
   }
 
   if (plan.steps.length > 0)
     plan.steps.push({
-      description: `record the applied state in ${join(harness.skillsDir, MANIFEST)}`,
+      description: `record the applied state in ${join(skillsDir, MANIFEST)}`,
       apply: () => {
-        mkdirSync(harness.skillsDir, { recursive: true });
+        mkdirSync(skillsDir, { recursive: true });
         writeFileSync(
-          join(harness.skillsDir, MANIFEST),
+          join(skillsDir, MANIFEST),
           `${JSON.stringify(next, null, 2)}\n`,
         );
       },
@@ -292,7 +305,10 @@ if (import.meta.main) {
   const args = process.argv.slice(2);
   const options = args.filter((arg) => arg.startsWith("--"));
   const [target, ...rest] = args.filter((arg) => !arg.startsWith("--"));
-  const all = harnesses(process.env.AGENT_LOADOUT_HOME ?? homedir());
+  // Tests set AGENT_LOADOUT_HOME; CODEX_HOME applies only to the real home.
+  const all = process.env.AGENT_LOADOUT_HOME
+    ? harnesses(process.env.AGENT_LOADOUT_HOME)
+    : harnesses(homedir(), process.env.CODEX_HOME);
   const selected =
     target === "all" ? all : all.filter((h) => h.name === target);
   if (
@@ -306,12 +322,19 @@ if (import.meta.main) {
     process.exit(2);
   }
   const check = options.includes("--check");
-  const plans = selected.map((harness) =>
-    planHarness(harness, options.includes("--force")),
+  // Harnesses that read one skills directory are planned together, so its manifest is written once.
+  const groups = new Map<string, Harness[]>();
+  for (const harness of selected)
+    groups.set(harness.skillsDir, [
+      ...(groups.get(harness.skillsDir) ?? []),
+      harness,
+    ]);
+  const plans = [...groups].map(([skillsDir, group]) =>
+    planTarget(skillsDir, group, options.includes("--force")),
   );
   let exitCode = 0;
   for (const plan of plans) {
-    console.log(`${plan.harness.name}:`);
+    console.log(`${plan.harnesses.map((h) => h.name).join(", ")}:`);
     for (const warning of plan.warnings) console.log(`  warning: ${warning}`);
     for (const problem of plan.problems)
       console.log(`  cannot apply: ${problem}`);
