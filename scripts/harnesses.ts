@@ -3,12 +3,10 @@ import { join } from "node:path";
 
 export interface Harness {
   name: string;
-  /** Directory that receives one copy of each skill; harnesses that read the same directory share it. */
+  /** Directory that receives one copy of each skill. */
   skillsDir: string;
   /** File that receives the global prompt section. */
   promptPath: string;
-  /** A file the harness reads instead of promptPath when it is not empty. */
-  promptOverride?: string;
   /** Files under prompt/ combined into the section, in order; missing files are skipped. */
   promptParts: string[];
   /** Other skill directories the harness reads first; a same-named skill there wins. */
@@ -17,10 +15,7 @@ export interface Harness {
   reserved: string[];
 }
 
-export function harnesses(
-  home: string,
-  codexHome = join(home, ".codex"),
-): Harness[] {
+export function harnesses(home: string): Harness[] {
   return [
     {
       name: "pi",
@@ -37,15 +32,6 @@ export function harnesses(
       promptParts: ["common.md", "claude-code.md"],
       shadowDirs: [],
       reserved: ["synced"],
-    },
-    {
-      name: "codex",
-      skillsDir: join(home, ".agents", "skills"),
-      promptPath: join(codexHome, "AGENTS.md"),
-      promptOverride: join(codexHome, "AGENTS.override.md"),
-      promptParts: ["common.md", "codex.md"],
-      shadowDirs: [],
-      reserved: [],
     },
   ];
 }

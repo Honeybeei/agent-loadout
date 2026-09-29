@@ -14,7 +14,7 @@ Write this repository's documents by the Framework [writing rules](skills/dev-fr
 ## Harness neutrality
 
 - Write skills, Framework text, and `prompt/common.md` so they read correctly in every supported harness. Do not assume one harness's tools, commands, or invocation syntax.
-- Put material that only one harness needs in that harness's prompt addition (`prompt/<harness>.md`) or its entry in `scripts/harnesses.ts`. One exception lives inside skills: Codex ignores `disable-model-invocation`, so every skill that sets it to `true` also has `agents/openai.yaml` with `policy.allow_implicit_invocation: false`. The tests keep the two in step.
+- Put material that only one harness needs in that harness's prompt addition (`prompt/<harness>.md`) or its entry in `scripts/harnesses.ts`.
 - Keep harness settings out of this repository: themes, keybindings, models, authentication, Pi extensions, and Pi subagents.
 
 ## Skills layout
