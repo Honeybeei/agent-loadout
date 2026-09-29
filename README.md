@@ -44,6 +44,7 @@ agent-loadout/
     │                    including the workflow skills in project/.agents/skills/
     ├── dev-doctor/      Adopts, updates, and checks the Framework in a project
     ├── handoff/
+    ├── loadout-feedback/  Reports problems with this material from any project
     └── writing-for-agents/
 ```
 
