@@ -11,7 +11,7 @@ Each topic has one detailed owner, and Knowledge and Plan hold only their own co
 
 ## Judgment checks
 
-Unit: one topic and the documents that own it.
+Unit: one topic and the documents that own it; and, as one more unit, the project rules in the root `AGENTS.md`, outside the managed section.
 
 | Check | How |
 | --- | --- |
@@ -19,5 +19,8 @@ Unit: one topic and the documents that own it.
 | The owner does not restate or adapt a Framework rule | Compare it with the rules in `knowledge/dev-framework/` |
 | The owner holds no Plan content: goals, work done, remaining work, or order | Classify each part by the question it answers |
 | Proposals still under consideration stay out, and approved but unimplemented decisions are labeled | Look for decisions stated without approval or status |
+| Project rules in `AGENTS.md` do not restate or contradict Framework rules, or rely on concepts the Framework no longer uses, such as per-node work branches | Compare each rule with the rules in `knowledge/dev-framework/` |
 
 Move Plan content into the node it belongs to. When no node fits, list it as later work.
+
+For a project rule that contradicts the Framework, ask whether it is a deliberate project choice. Keep a deliberate one, reworded in the Framework's current terms; remove a restatement and link to the Framework rule instead.

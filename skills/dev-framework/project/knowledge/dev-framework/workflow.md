@@ -26,7 +26,7 @@ dev-next → dev-explore → dev-dispatch ────────────�
 
 - The lead session persists across dispatches. Decisions are recorded in Plan and Knowledge as they are made, so a new lead session can continue from the files when the old one ends.
 - Each dispatch gets a new implementation session, which the user opens in the worktree. It lasts until review merges or discards the worktree, and it also makes the fixes review asks for.
-- The main flow does not wait for implementations. It keeps exploring and dispatching other nodes, and reviews each implementation when its report arrives. It does not explore a dispatched node; it explores another branch of the tree instead.
+- The main flow does not wait for implementations. It keeps exploring and dispatching other nodes, and reviews each implementation when its report arrives. It leaves a dispatched node to its implementation session until review merges or reopens it, and explores other branches of the tree meanwhile.
 - Only the main flow edits `plan/` and `knowledge/`. An implementation session writes code, tests, configuration, and other files within its node's scope, such as a workspace README the node's criteria require.
 - Every implementation runs in its own worktree, however small.
 

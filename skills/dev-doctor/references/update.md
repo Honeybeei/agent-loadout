@@ -6,6 +6,8 @@ Bring a Framework project up to the installed Framework. Sync replaces managed m
 
 - Show what sync would change: the `Managed material` findings.
 - When sync is blocked, show how to clear each problem: commit or stash the listed changes, move skills out of a real `.claude/skills/` directory into `.agents/skills/`, or repair the section markers.
+- When `plan/` has uncommitted changes, ask the user to commit or set them aside first. The map script regenerates the map from the working tree, so the update's map would carry them.
+- List the branches other than `main`, `impl/*`, `parked/*`, and `prototype/*`, which [Git workflow](../../dev-framework/project/knowledge/dev-framework/git-workflow.md#branches) no longer uses, with whether each is merged into `main`. Propose deleting the merged ones, and ask about the others.
 - List `in_progress` nodes without a `Dispatched` Record line: an earlier Framework implemented them in place. Recommend finishing and merging each on its old branch before the update, or setting it back to `ready` after the update so it can be dispatched.
 - Say that the check menu follows the update, because the checks read the project's copy of the rules.
 
