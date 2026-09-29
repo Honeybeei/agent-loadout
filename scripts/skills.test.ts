@@ -13,11 +13,16 @@ function skillFiles(directory: string): string[] {
   });
 }
 
-const files = skillFiles(join(REPO, "skills"));
+// Installed skills, and the skills for working on this repository.
+const files = [
+  ...skillFiles(join(REPO, "skills")),
+  ...skillFiles(join(REPO, ".agents", "skills")),
+];
 
 test("finds the skills, including the Framework's project skills", () => {
   const paths = files.map((file) => relative(REPO, file));
   expect(paths).toContain("skills/dev-doctor/SKILL.md");
+  expect(paths).toContain(".agents/skills/resolve-feedback/SKILL.md");
   expect(paths).toContain(
     "skills/dev-framework/project/.agents/skills/dev-next/SKILL.md",
   );
