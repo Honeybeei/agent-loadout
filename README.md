@@ -31,6 +31,8 @@ Codex also reads `~/.agents/skills/`, so it receives the Pi skill copies without
 
 ```
 agent-loadout/
+├── .agents/skills/      Skills for working on this repository; not installed
+├── .claude/skills       Link to ../.agents/skills, for Claude Code
 ├── AGENTS.md            Rules for developing this repository
 ├── README.md
 ├── package.json         Repository tooling
@@ -48,7 +50,7 @@ agent-loadout/
     └── writing-for-agents/
 ```
 
-Every direct child of `skills/` is installed into the harness. The Framework's workflow skills (`dev-next`, `dev-explore`, `dev-dispatch`, `dev-implement`, `dev-review`) and the skills they use (`grilling`, `research`, `prototype`) are not; they live in each Framework project, where they match that project's version of the rules.
+`.agents/skills/` holds `resolve-feedback`, which turns the reports `loadout-feedback` writes in other projects into changes here, through grilling with the user. Every direct child of `skills/` is installed into the harness. The Framework's workflow skills (`dev-next`, `dev-explore`, `dev-dispatch`, `dev-implement`, `dev-review`) and the skills they use (`grilling`, `research`, `prototype`) are not; they live in each Framework project, where they match that project's version of the rules.
 
 ## Applying
 

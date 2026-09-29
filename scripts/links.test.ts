@@ -21,8 +21,8 @@ function relativeLinks(text: string): string[] {
     .filter((target) => target !== "" && !/^[a-z][a-z0-9+.-]*:/i.test(target));
 }
 
-const files = ["README.md", "AGENTS.md", "prompt", "skills"].flatMap((path) =>
-  markdownFiles(join(REPO, path)),
+const files = ["README.md", "AGENTS.md", "prompt", "skills", ".agents"].flatMap(
+  (path) => markdownFiles(join(REPO, path)),
 );
 
 test("finds the documents to check", () => {

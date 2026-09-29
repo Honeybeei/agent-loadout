@@ -20,6 +20,7 @@ Write this repository's documents by the Framework [writing rules](skills/dev-fr
 ## Skills layout
 
 - Every direct child of `skills/` is installed into the harness. A skill directory must contain `SKILL.md`; `dev-framework/` is the Framework source and has none.
+- `.agents/skills/` holds skills for working on this repository only, such as `resolve-feedback`. `.claude/skills` links to it so Claude Code finds them; the apply script does not install them. Give them names no installed skill uses.
 - `dev-framework/project/` mirrors a project root and is copied into Framework projects. Keep its links valid from that root.
 - Put the Framework's project skills in `dev-framework/project/.agents/skills/`, never directly under `skills/`: a harness copy would take precedence over the project copy in Claude Code.
 - Name section fragments `*.section.md`, never `README.md` or `AGENTS.md`, and add no `.claude/` directory under `dev-framework/project/`, so no harness loads them as instructions or skills while working in this repository.
@@ -34,6 +35,8 @@ The `loadout-feedback` skill writes reports about this repository's material int
 - Compare its agent-loadout commit with the current source first, and say when the problem is already solved.
 - Trace each named file to its source: a project's Framework copies come from `skills/dev-framework/project/`, harness skills from `skills/`, and the global prompt from `prompt/`.
 - When the work is done, list the reports it addressed. They live in other projects, so the user deletes them.
+
+The `resolve-feedback` skill in `.agents/skills/` works through reports this way.
 
 ## Applying to harnesses
 
