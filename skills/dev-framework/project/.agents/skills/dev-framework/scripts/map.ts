@@ -246,15 +246,18 @@ function progress(plan: Plan) {
   const leaves = all.filter(
     (n) => n.children.length === 0 && n.status !== "cancelled",
   );
+  const counts = STATUSES.filter((s) => s !== "cancelled")
+    .map((status) => ({
+      status,
+      count: leaves.filter((n) => n.status === status).length,
+    }))
+    .filter(({ count }) => count > 0);
   return {
     done: leaves.filter((n) => n.status === "done").length,
     total: leaves.length,
-    open: STATUSES.filter((s) => s !== "done" && s !== "cancelled")
-      .map((status) => ({
-        status,
-        count: leaves.filter((n) => n.status === status).length,
-      }))
-      .filter(({ count }) => count > 0)
+    counts,
+    open: counts
+      .filter(({ status }) => status !== "done")
       .map(({ status, count }) => `${count} ${status}`),
     questions: all.reduce((sum, n) => sum + n.openQuestions, 0),
   };
@@ -266,6 +269,23 @@ function progressLine(plan: Plan): string {
   return `Progress: ${done} of ${plural(total, "leaf node")} done${breakdown}; ${plural(questions, "open question")}`;
 }
 
+/** The unfinished leaves of a node: the node itself when it is a leaf. */
+function unfinishedLeaves(plan: Plan, id: string): PlanNode[] {
+  const node = plan.nodes.get(id);
+  if (!node || finished(node)) return [];
+  if (node.children.length === 0) return [node];
+  return node.children.flatMap((child) => unfinishedLeaves(plan, child.id));
+}
+
+/** The unfinished leaves a leaf waits for; waiting for a parent means waiting for its unfinished leaves. */
+const waitedLeaves = (plan: Plan, node: PlanNode): PlanNode[] => [
+  ...new Set(
+    node.dependsOn
+      .flatMap((id) => unfinishedLeaves(plan, id))
+      .filter((leaf) => leaf !== node),
+  ),
+];
+
 /**
  * Unfinished leaf nodes in steps: each node comes one step after the latest work it waits for.
  * Waiting for a parent means waiting for its unfinished leaves.
@@ -274,12 +294,6 @@ export function orderSteps(plan: Plan): PlanNode[][] {
   const leaves = treeOrder(checkedRoot(plan)).filter(
     (n) => n.children.length === 0 && !finished(n),
   );
-  const expand = (id: string): PlanNode[] => {
-    const node = plan.nodes.get(id);
-    if (!node || finished(node)) return [];
-    if (node.children.length === 0) return [node];
-    return node.children.flatMap((child) => expand(child.id));
-  };
   const steps = new Map<string, number>();
   const visiting = new Set<string>();
   const step = (node: PlanNode): number => {
@@ -288,10 +302,8 @@ export function orderSteps(plan: Plan): PlanNode[][] {
     if (visiting.has(node.id)) return 0; // A dependency cycle; stop here.
     visiting.add(node.id);
     let result = 1;
-    for (const id of node.dependsOn)
-      for (const dependency of expand(id))
-        if (dependency !== node)
-          result = Math.max(result, step(dependency) + 1);
+    for (const dependency of waitedLeaves(plan, node))
+      result = Math.max(result, step(dependency) + 1);
     visiting.delete(node.id);
     steps.set(node.id, result);
     return result;
@@ -497,30 +509,44 @@ function criteria(node: PlanNode): { met: number; total: number } {
 
 const STYLE = `
 :root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #d1d9e0; --panel: #f6f8fa;
-  --fog: #818b98; --exploring: #9a6700; --decomposed: #59636e; --ready: #1a7f37; --in_progress: #0969da; --done: #8250df; --cancelled: #818b98; }
+  --fog: #818b98; --exploring: #9a6700; --decomposed: #1b7c83; --ready: #1a7f37; --in_progress: #0969da; --done: #8250df; --cancelled: #818b98; }
 @media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #3d444d; --panel: #151b23;
-  --exploring: #d29922; --decomposed: #9198a1; --ready: #3fb950; --in_progress: #4493f8; --done: #ab7df8; } }
+  --fog: #9198a1; --exploring: #d29922; --decomposed: #39c5cf; --ready: #3fb950; --in_progress: #4493f8; --done: #ab7df8; --cancelled: #9198a1; } }
 * { box-sizing: border-box; }
 body { margin: 0 auto; max-width: 72rem; padding: 1.5rem 1rem 3rem; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; }
 h1 { margin: 0; font-size: 1.6rem; } h2 { font-size: 1.05rem; margin: 2rem 0 0.75rem; } h3 { margin: 0; font-size: 1.2rem; }
 h4 { margin: 1.25rem 0 0.25rem; font-size: 0.95rem; } h5 { margin: 0.75rem 0 0.25rem; font-size: 0.9rem; }
 p, ul { margin: 0.25rem 0; } ul { padding-left: 1.25rem; } code, pre { font-family: ui-monospace, monospace; font-size: 0.9em; }
 pre { background: var(--panel); padding: 0.5rem; overflow-x: auto; }
+a { color: inherit; }
 .muted { color: var(--muted); font-size: 0.9rem; }
-.bar { height: 0.5rem; background: var(--panel); border: 1px solid var(--line); border-radius: 1rem; margin: 0.75rem 0 0.25rem; overflow: hidden; }
-.bar span { display: block; height: 100%; background: var(--done); }
+.bar { display: flex; height: 0.6rem; background: var(--panel); border: 1px solid var(--line); border-radius: 1rem; margin: 0.75rem 0 0.25rem; overflow: hidden; }
+.bar span { height: 100%; background: var(--c); }
+.legend { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; list-style: none; padding: 0; margin: 0.5rem 0 0; }
 .fog { --c: var(--fog); } .exploring { --c: var(--exploring); } .decomposed { --c: var(--decomposed); } .ready { --c: var(--ready); }
 .in_progress { --c: var(--in_progress); } .done { --c: var(--done); } .cancelled { --c: var(--cancelled); }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
 .status { color: var(--c); font-size: 0.85rem; }
-.dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--c); margin-right: 0.4rem; }
+.dot { display: inline-block; flex: none; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--c); border: 2px solid var(--c); margin-right: 0.4rem; }
+.cancelled .dot, .dot.cancelled { background: transparent; }
+.badge { display: inline-block; margin-left: 0.35rem; padding: 0 0.4rem; border: 1px solid var(--line); border-radius: 1rem; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
 .card { display: block; width: 100%; padding: 0.4rem 0.6rem; border: 1px solid var(--line); border-left: 4px solid var(--c); border-radius: 6px; background: var(--bg); }
-.steps { display: flex; gap: 0.75rem; overflow-x: auto; list-style: none; padding: 0 0 0.5rem; }
-.steps > li { flex: 1 0 9rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.card.blocked { border-left-style: dashed; }
+.graph { position: relative; overflow-x: auto; padding-bottom: 0.5rem; }
+.edges { position: absolute; top: 0; left: 0; pointer-events: none; }
+.edges path { fill: none; stroke: var(--muted); stroke-width: 1.5; opacity: 0.6; marker-end: url(#arrow); }
+.edges path.on { stroke: var(--fg); stroke-width: 2; opacity: 1; marker-end: url(#arrow-on); }
+.edges path.off { opacity: 0.3; }
+#arrow path { fill: var(--muted); } #arrow-on path { fill: var(--fg); }
+.steps { position: relative; display: flex; gap: 2.5rem; width: max-content; min-width: 100%; list-style: none; margin: 0; padding: 0; }
+.steps > li { flex: 1 0 10rem; max-width: 16rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .possible { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; } .possible .card { width: auto; }
 .tree ul { list-style: none; padding-left: 1rem; } .tree > ul { padding-left: 0; } .tree li { margin: 0.2rem 0; }
 .columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 1.5rem; align-items: start; }
 .detail { position: sticky; top: 1rem; padding: 1rem; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.relations { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 0.75rem; margin: 0.75rem 0 0; font-size: 0.9rem; }
+.relations dt { color: var(--muted); } .relations dd { margin: 0; display: flex; flex-wrap: wrap; gap: 0.1rem 0.75rem; }
+.relations a { display: inline-flex; align-items: center; text-decoration: none; } .relations a:hover .title { text-decoration: underline; }
 .selected { outline: 2px solid var(--fg); outline-offset: 1px; } .before { outline: 2px dashed var(--c); } .after { outline: 2px dotted var(--c); }
 .cancelled .title { text-decoration: line-through; }
 li.check { list-style: none; margin-left: -1.1rem; }
@@ -528,9 +554,44 @@ li.check { list-style: none; margin-left: -1.1rem; }
 `;
 
 const SCRIPT = `
+const graph = document.querySelector(".graph");
+let current = "";
+function draw() {
+  if (!graph) return;
+  const svg = graph.querySelector(".edges");
+  svg.setAttribute("width", graph.scrollWidth);
+  svg.setAttribute("height", graph.scrollHeight);
+  const base = graph.getBoundingClientRect();
+  const cards = new Map([...graph.querySelectorAll("[data-node]")].map((card) => [card.dataset.node, card]));
+  let paths = "";
+  for (const [id, card] of cards) {
+    for (const from of card.dataset.waits.split(" ")) {
+      const source = cards.get(from);
+      if (!source) continue;
+      const a = source.getBoundingClientRect(), b = card.getBoundingClientRect();
+      const sx = a.right - base.left + graph.scrollLeft, sy = a.top - base.top + a.height / 2;
+      const tx = b.left - base.left + graph.scrollLeft - 2, ty = b.top - base.top + b.height / 2;
+      const bend = Math.max(16, (tx - sx) / 2);
+      paths += '<path data-from="' + from + '" data-to="' + id + '" d="M' + sx + " " + sy + " C" + (sx + bend) + " " + sy + " " + (tx - bend) + " " + ty + " " + tx + " " + ty + '"/>';
+    }
+  }
+  const arrow = (id) => '<marker id="' + id + '" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z"/></marker>';
+  svg.innerHTML = "<defs>" + arrow("arrow") + arrow("arrow-on") + "</defs>" + paths;
+  highlight();
+}
+function highlight() {
+  if (!graph) return;
+  const paths = [...graph.querySelectorAll(".edges path[data-from]")];
+  const touching = paths.filter((path) => path.dataset.from === current || path.dataset.to === current);
+  for (const path of paths) {
+    path.classList.toggle("on", touching.includes(path));
+    path.classList.toggle("off", touching.length > 0 && !touching.includes(path));
+  }
+}
 function select(id) {
   const detail = document.querySelector('[data-detail="' + id + '"]');
   if (!detail) return false;
+  current = id;
   const waits = detail.dataset.deps.split(" ");
   for (const element of document.querySelectorAll("[data-detail]")) element.hidden = element !== detail;
   for (const element of document.querySelectorAll("[data-node]")) {
@@ -539,14 +600,23 @@ function select(id) {
     element.classList.toggle("before", waits.includes(node));
     element.classList.toggle("after", element.dataset.deps.split(" ").includes(id));
   }
-  history.replaceState(null, "", "#" + id);
+  highlight();
   return true;
 }
+function show(id) {
+  if (!select(id)) return;
+  history.replaceState(null, "", "#" + id);
+  if (matchMedia("(max-width: 48rem)").matches) document.querySelector(".detail").scrollIntoView({ block: "start" });
+}
 document.addEventListener("click", (event) => {
-  const element = event.target.closest("[data-node]");
-  if (element) select(element.dataset.node);
+  const element = event.target.closest("[data-node], [data-go]");
+  if (!element) return;
+  event.preventDefault();
+  show(element.dataset.node ?? element.dataset.go);
 });
 if (!select(decodeURIComponent(location.hash.slice(1)))) select(document.body.dataset.start);
+if (graph) new ResizeObserver(draw).observe(graph);
+draw();
 `;
 
 /** A self-contained page that shows the Plan's progress, order, tree, and node details. */
@@ -555,30 +625,62 @@ export function renderHtml(plan: Plan, changes: Change[] = []): string {
   const order = treeOrder(root);
   const possible = possibleWork(plan);
   const dispatched = running(plan);
-  const { done, total, open, questions } = progress(plan);
+  const { done, total, counts, open, questions } = progress(plan);
   const met = order.reduce((sum, n) => sum + criteria(n).met, 0);
   const allCriteria = order.reduce((sum, n) => sum + criteria(n).total, 0);
-  const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+  const neededBy = (node: PlanNode) =>
+    order.filter((n) => n.dependsOn.includes(node.id));
 
-  const attributes = (node: PlanNode) =>
-    `type="button" class="${node.status}" data-node="${escapeHtml(node.id)}" data-deps="${escapeHtml(node.dependsOn.join(" "))}"`;
-  const card = (node: PlanNode) =>
-    `<button ${attributes(node).replace('class="', 'class="card ')}><span class="title">${escapeHtml(node.title)}</span><br><span class="status">${escapeHtml(summary(node))}</span></button>`;
+  /** A badge for unfinished work that waits for other unfinished work. */
+  const waitBadge = (node: PlanNode) => {
+    const waiting = finished(node) ? [] : waitingFor(node, plan.nodes);
+    if (waiting.length === 0) return "";
+    const titles = waiting.map((id) => plan.nodes.get(id)?.title ?? id);
+    return `<span class="badge" title="Waits for ${escapeHtml(titles.join(", "))}">waits for ${waiting.length}</span>`;
+  };
+  const attributes = (node: PlanNode, extra = "") => {
+    const blocked =
+      !finished(node) && waitingFor(node, plan.nodes).length > 0
+        ? " blocked"
+        : "";
+    return `type="button" class="${extra}${node.status}${blocked}" data-node="${escapeHtml(node.id)}" data-deps="${escapeHtml(node.dependsOn.join(" "))}"`;
+  };
+  const card = (node: PlanNode, waits = "") =>
+    `<button ${attributes(node, "card ")}${waits}><span class="title">${escapeHtml(node.title)}</span><br><span class="status">${escapeHtml(summary(node))}</span>${waitBadge(node)}</button>`;
+  const stepCard = (node: PlanNode) =>
+    card(
+      node,
+      ` data-waits="${escapeHtml(
+        waitedLeaves(plan, node)
+          .map((n) => n.id)
+          .join(" "),
+      )}"`,
+    );
   const branch = (node: PlanNode): string =>
-    `<li><button ${attributes(node)}><span class="dot"></span><span class="title">${escapeHtml(node.title)}</span></button> <span class="muted">${escapeHtml(summary(node))}</span>${node.children.length > 0 ? `<ul>${node.children.map(branch).join("")}</ul>` : ""}</li>`;
+    `<li><button ${attributes(node)}><span class="dot"></span><span class="title">${escapeHtml(node.title)}</span></button> <span class="muted">${escapeHtml(summary(node))}</span>${waitBadge(node)}${node.children.length > 0 ? `<ul>${node.children.map(branch).join("")}</ul>` : ""}</li>`;
+  const go = (node: PlanNode) =>
+    `<a href="#${escapeHtml(node.id)}" data-go="${escapeHtml(node.id)}" class="${node.status}" title="${node.status}"><span class="dot"></span><span class="title">${escapeHtml(node.title)}</span></a>`;
   const detail = (node: PlanNode) => {
     const { met: nodeMet, total: nodeTotal } = criteria(node);
     const facts = [
       `<span class="status ${node.status}">${node.status}</span>`,
       `plan/nodes/${escapeHtml(node.id)}.md`,
-      node.parent === null
-        ? ""
-        : `parent: ${escapeHtml(plan.nodes.get(node.parent)?.title ?? node.parent)}`,
-      node.dependsOn.length > 0
-        ? `depends on: ${escapeHtml(node.dependsOn.map((id) => plan.nodes.get(id)?.title ?? id).join(", "))}`
-        : "",
       nodeTotal > 0 ? `${nodeMet} of ${nodeTotal} criteria met` : "",
     ].filter((fact) => fact !== "");
+    const parent =
+      node.parent === null ? undefined : plan.nodes.get(node.parent);
+    const relations: [string, PlanNode[]][] = [
+      ["Parent", parent ? [parent] : []],
+      ["Depends on", node.dependsOn.flatMap((id) => plan.nodes.get(id) ?? [])],
+      ["Needed by", neededBy(node)],
+      ["Children", node.children],
+    ];
+    const rows = relations
+      .filter(([, list]) => list.length > 0)
+      .map(
+        ([label, list]) => `<dt>${label}</dt><dd>${list.map(go).join("")}</dd>`,
+      )
+      .join("");
     const body = sections(node.body)
       .map(
         ({ heading, lines }) => `<h4>${inline(heading)}</h4>\n${blocks(lines)}`,
@@ -587,10 +689,22 @@ export function renderHtml(plan: Plan, changes: Change[] = []): string {
     return `<article data-detail="${escapeHtml(node.id)}" data-deps="${escapeHtml(node.dependsOn.join(" "))}" hidden>
 <h3>${escapeHtml(node.title)}</h3>
 <p class="muted">${facts.join(" · ")}</p>
+${rows === "" ? "" : `<dl class="relations">${rows}</dl>`}
 ${body}
 </article>`;
   };
   const start = possible[0]?.[1][0] ?? root;
+  const segments = [...counts]
+    .reverse()
+    .map(
+      ({ status, count }) =>
+        `<span class="${status}" style="width: ${(count / total) * 100}%" title="${count} ${status}"></span>`,
+    )
+    .join("");
+  const legend = STATUSES.map(
+    (status) =>
+      `<li class="${status} muted"><span class="dot"></span>${status}</li>`,
+  ).join("");
 
   return `<!doctype html>
 <html lang="en">
@@ -604,8 +718,9 @@ ${body}
 <header>
 <h1>${escapeHtml(root.title)}</h1>
 <p class="muted">Generated from <code>plan/nodes/</code> by <code>.agents/skills/dev-framework/scripts/map.ts</code>. Do not edit.</p>
-<div class="bar"><span style="width: ${percent}%"></span></div>
+<div class="bar">${segments}</div>
 <p>${done} of ${plural(total, "leaf node")} done${open.length > 0 ? ` · ${escapeHtml(open.join(", "))}` : ""} · ${plural(questions, "open question")} · ${met} of ${allCriteria} criteria met</p>
+<ul class="legend">${legend}<li class="muted"><span class="badge">waits for N</span> blocked by unfinished work</li></ul>
 </header>
 <main>
 ${
@@ -627,13 +742,16 @@ ${
     : '<p class="muted">Nothing: every open node is blocked or finished.</p>'
 }
 <h2>Order</h2>
-<p class="muted">Unfinished leaf nodes in dependency order. Nodes in one step do not wait for each other. Select a node to see its details: a dashed outline marks the work it waits for, a dotted outline the work that waits for it.</p>
+<p class="muted">Unfinished leaf nodes in dependency order. Nodes in one step do not wait for each other; an arrow leads from work to the work that waits for it. Select a node to see its details: a dashed outline marks the work it waits for, a dotted outline the work that waits for it.</p>
+<div class="graph">
+<svg class="edges" aria-hidden="true"></svg>
 <ol class="steps">${orderSteps(plan)
     .map(
       (group, index) =>
-        `<li><span class="muted">Step ${index + 1}</span>${group.map(card).join("")}</li>`,
+        `<li><span class="muted">Step ${index + 1}</span>${group.map(stepCard).join("")}</li>`,
     )
     .join("")}</ol>
+</div>
 <div class="columns">
 <section class="tree">
 <h2>Tree</h2>

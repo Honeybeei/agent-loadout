@@ -165,7 +165,14 @@ The map shows, in order:
 
 5. "Order": the unfinished leaf nodes in numbered steps. A node comes one step after the latest work it waits for, and waiting for a parent means waiting for its unfinished leaves. Nodes in one step do not wait for each other.
 
-The view shows the same, plus each node's content, the Completion criteria met, and the latest commits that touched `plan/`. Selecting a node marks the work it waits for and the work that waits for it.
+The view shows the same, plus each node's content, the Completion criteria met, and the latest commits that touched `plan/`. It also shows:
+
+- Progress as a bar split by status, and a legend of the status colors.
+- A badge on each blocked node, with the number of nodes it waits for.
+- Arrows in Order, from each piece of work to the work that waits for it.
+- Links from each node's details to its parent, dependencies, dependents, and children.
+
+Selecting a node marks the work it waits for and the work that waits for it, and highlights its arrows.
 
 - The script writes no map while the Plan breaks the rules in this document; it lists the problems instead.
 - Regenerate the map after adding, removing, or renaming a node, after changing frontmatter, or after changing a node's open questions, since the map shows their count. The view also shows node content, so regenerate before opening it.
