@@ -257,6 +257,54 @@ describe("renderHtml", () => {
     expect(html).toContain("☑ Runs <code>bun</code>");
     expect(html).toContain("☐ See the guide");
   });
+
+  test("marks blocked work and gives the order its arrows", () => {
+    const html = renderHtml(
+      loadPlan(
+        project({
+          ...sample,
+          launch: node({
+            title: "Launch",
+            parent: "root",
+            depends_on: ["apps"],
+            status: "fog",
+          }),
+        }),
+      ),
+    );
+    expect(html).toContain('class="card ready blocked" data-node="chat"');
+    expect(html).toContain('title="Waits for Setup">waits for 1</span>');
+    expect(html).toContain(
+      'data-node="chat" data-deps="setup" data-waits="setup"',
+    );
+    expect(html).toContain(
+      'data-node="launch" data-deps="apps" data-waits="chat setup"',
+    );
+    expect(html).toContain('data-node="setup" data-deps="" data-waits=""');
+  });
+
+  test("links each node to its parent, dependencies, dependents, and children", () => {
+    const html = renderHtml(plan());
+    const detail = (id: string) =>
+      html.split(`<article data-detail="${id}"`)[1]?.split("</article>")[0] ??
+      "";
+    expect(detail("setup")).toContain('<dt>Parent</dt><dd><a href="#desktop"');
+    expect(detail("setup")).toContain('<dt>Needed by</dt><dd><a href="#chat"');
+    expect(detail("chat")).toContain('<dt>Depends on</dt><dd><a href="#setup"');
+    expect(detail("desktop")).toContain(
+      '<dt>Children</dt><dd><a href="#chat" data-go="chat"',
+    );
+    expect(detail("root")).not.toContain("<dt>Parent</dt>");
+  });
+
+  test("splits the progress bar by status and shows a legend", () => {
+    const html = renderHtml(plan());
+    expect(html).toContain(
+      '<div class="bar"><span class="ready" style="width: 66.66666666666666%" title="2 ready"></span><span class="fog" style="width: 33.33333333333333%" title="1 fog"></span></div>',
+    );
+    for (const status of ["fog", "decomposed", "done", "cancelled"])
+      expect(html).toContain(`<li class="${status} muted">`);
+  });
 });
 
 test("counts open questions only inside their section", () => {
