@@ -50,7 +50,7 @@ agent-loadout/
     └── writing-for-agents/
 ```
 
-`.agents/skills/` holds `resolve-feedback`, which turns the reports `loadout-feedback` writes in other projects into changes here, through grilling with the user. Every direct child of `skills/` is installed into the harness. The Framework's workflow skills (`dev-next`, `dev-explore`, `dev-dispatch`, `dev-implement`, `dev-review`) and the skills they use (`grilling`, `research`, `prototype`) are not; they live in each Framework project, where they match that project's version of the rules.
+`.agents/skills/` holds `resolve-feedback`, which turns the reports `loadout-feedback` writes in other projects into changes here, through grilling with the user. Every direct child of `skills/` is installed into the harness. The Framework's workflow skills (`dev-next`, `dev-plan`, `dev-explore`, `dev-collaborate`, `dev-blackbox-dispatch`, `dev-blackbox-implement`, `dev-blackbox-review`) and the skills they use (`grilling`, `research`, `prototype`) are not; they live in each Framework project, where they match that project's version of the rules.
 
 ## Applying
 
@@ -75,6 +75,7 @@ bun run apply <pi | claude-code | all>           # apply it
 | `skills/writing-for-agents/` | [mattpocock/skills](https://github.com/mattpocock/skills) `c55ee46`, unchanged; MIT, `LICENSE` included |
 | `skills/dev-framework/project/.agents/skills/grilling/` | The my-pi Framework version, adapted from mattpocock/skills `c55ee46`; MIT, `LICENSE` included |
 | `skills/dev-framework/project/.agents/skills/research/`, `prototype/` | mattpocock/skills `c55ee46`, unchanged; MIT, `LICENSE` included |
+| `skills/dev-framework/project/knowledge/dev-framework/plan-documentation/explore.md` | The explore node's wayfinding map is adapted from the `wayfinder` skill of mattpocock/skills `d81f3a1`; MIT |
 | The rest of the Dev Framework | Redesigned here, using the my-pi Framework at `8b12776` as a reference; its writing rules are kept unchanged apart from frontmatter |
 
 ## Development

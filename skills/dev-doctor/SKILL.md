@@ -19,7 +19,7 @@ Run the scripts from the project root. `<framework>` is `<this skill's directory
 
 ## 1. Diagnose
 
-- Confirm the working directory is the Git top level and the main checkout: the first entry of `git worktree list`. In a Framework project, one with `dev.yaml`, also confirm the branch is `main`, because only the main flow edits Plan and Knowledge. Otherwise, say so and stop.
+- Confirm the working directory is the Git top level and the main checkout: the first entry of `git worktree list`. In a Framework project, one with `dev.yaml`, also confirm the branch is `main`, because only the lead session edits Plan and Knowledge there. Otherwise, say so and stop.
 - Run the diagnosis. It prints the state and the managed material findings. For a `current` project it also counts the script findings of each check group; for a project that is `not adopted`, it lists what blocks adoption.
 - Show whether the Framework is adopted and whether its managed material is current, then continue by state:
 
@@ -36,7 +36,7 @@ Show the check groups as a numbered list with each group's script finding count 
 | # | Group | `--group` id | Judgment checks | Reference |
 | --- | --- | --- | --- | --- |
 | 1 | Structure | `structure` | Setup commands and automated checks in `AGENTS.md` | [Structure](references/checks/structure.md) |
-| 2 | Plan | `plan` | Stage blocks, Record lines, Knowledge content in nodes | [Plan](references/checks/plan.md) |
+| 2 | Plan | `plan` | Kind templates, Record lines, Knowledge content in nodes | [Plan](references/checks/plan.md) |
 | 3 | Knowledge form | `knowledge` | None | [Knowledge form](references/checks/knowledge.md) |
 | 4 | SSoT | `ssot` | Topics with more than one detailed owner, restated Framework rules, Plan content in Knowledge, project rules in `AGENTS.md` | [SSoT](references/checks/ssot.md) |
 | 5 | Links and navigation | `links` | Reading conditions on links, reachability of other documents, reliance on `.tmp/` | [Links and navigation](references/checks/links.md) |
@@ -56,7 +56,7 @@ Show the check groups as a numbered list with each group's script finding count 
 Propose what the reference describes in one short list, and wait for approval.
 
 - Propose one fix per finding, and group findings of one kind.
-- When a fix needs judgment, such as which status an old Plan node gets, recommend a value for each case.
+- When a fix needs judgment, such as which section a node's content belongs in, recommend a value for each case.
 - List existing material that could later become Plan or Knowledge as later work; do not convert it now.
 
 ## 5. Apply

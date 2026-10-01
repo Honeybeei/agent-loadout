@@ -11,24 +11,38 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
+export const KINDS = ["goal", "explore", "collaborative", "blackbox"] as const;
+export type Kind = (typeof KINDS)[number];
+
 export const STATUSES = [
-  "fog",
-  "exploring",
-  "decomposed",
-  "ready",
+  "open",
+  "todo",
   "in_progress",
   "done",
   "cancelled",
 ] as const;
 export type Status = (typeof STATUSES)[number];
 
+const KIND_STATUSES: Record<Kind, readonly Status[]> = {
+  goal: ["open", "done", "cancelled"],
+  explore: ["todo", "in_progress", "done", "cancelled"],
+  collaborative: ["todo", "in_progress", "done", "cancelled"],
+  blackbox: ["todo", "in_progress", "done", "cancelled"],
+};
+
+/** Sections each kind must have; the template documents in knowledge/dev-framework/plan-documentation/ define them. */
+const REQUIRED_SECTIONS: Partial<Record<Kind, string[]>> = {
+  blackbox: ["Goal", "Output", "Completion criteria", "Verification", "Record"],
+};
+
 export interface PlanNode {
   id: string;
   title: string;
   parent: string | null;
   dependsOn: string[];
+  kind: Kind;
   status: Status;
-  openQuestions: number;
+  openTickets: number;
   /** The node file after its frontmatter. */
   body: string;
   children: PlanNode[];
@@ -40,20 +54,42 @@ export interface Plan {
   errors: string[];
 }
 
-const FIELDS = ["title", "parent", "depends_on", "status"];
+const FIELDS = ["title", "parent", "depends_on", "kind", "status"];
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const finished = (node: PlanNode) =>
   node.status === "done" || node.status === "cancelled";
 
-export function countOpenQuestions(body: string): number {
-  let inSection = false;
-  let count = 0;
+/** An open goal without children, which planning has not split yet. */
+const needsPlanning = (node: PlanNode) =>
+  node.kind === "goal" && node.status === "open" && node.children.length === 0;
+
+/** An open goal whose children are all finished, ready to be closed. */
+const closable = (node: PlanNode) =>
+  node.kind === "goal" &&
+  node.status === "open" &&
+  node.children.length > 0 &&
+  node.children.every(finished);
+
+/** The node's H2 sections, in order. */
+function sections(body: string): { heading: string; lines: string[] }[] {
+  const result: { heading: string; lines: string[] }[] = [];
   for (const line of body.split(/\r?\n/)) {
-    if (line.startsWith("## ")) inSection = line.trim() === "## Open questions";
-    else if (inSection && line.startsWith("- ")) count++;
+    if (line.startsWith("## "))
+      result.push({ heading: line.slice(3).trim(), lines: [] });
+    else result.at(-1)?.lines.push(line);
   }
-  return count;
+  return result;
+}
+
+/** The list items of one section, or none when the section is missing. */
+function items(body: string, heading: string): string[] {
+  const lines = sections(body).find((s) => s.heading === heading)?.lines ?? [];
+  return lines.filter((line) => /^[-*+]\s/.test(line));
+}
+
+export function countOpenTickets(body: string): number {
+  return items(body, "Tickets").length;
 }
 
 function parseNode(
@@ -83,7 +119,7 @@ function parseNode(
     if (!FIELDS.includes(key))
       errors.push(`${id}: unknown frontmatter field "${key}"`);
   }
-  const { title, parent, depends_on: dependsOn, status } = fields;
+  const { title, parent, depends_on: dependsOn, kind, status } = fields;
   if (typeof title !== "string" || title.trim() === "")
     errors.push(`${id}: title must be a nonempty string`);
   if (parent !== null && typeof parent !== "string")
@@ -93,17 +129,31 @@ function parseNode(
     !dependsOn.every((d) => typeof d === "string")
   )
     errors.push(`${id}: depends_on must be a list of node names`);
-  if (!STATUSES.includes(status as Status))
-    errors.push(`${id}: status must be one of ${STATUSES.join(", ")}`);
+  if (!KINDS.includes(kind as Kind))
+    errors.push(`${id}: kind must be one of ${KINDS.join(", ")}`);
+  else if (!KIND_STATUSES[kind as Kind].includes(status as Status))
+    errors.push(
+      `${id}: status must be one of ${KIND_STATUSES[kind as Kind].join(", ")} for kind ${kind}`,
+    );
   if (errors.length > before) return undefined;
+  const body = text.slice(match[0].length);
+  const headings = sections(body).map((s) => s.heading);
+  for (const heading of REQUIRED_SECTIONS[kind as Kind] ?? [])
+    if (!headings.includes(heading))
+      errors.push(`${id}: kind ${kind} needs a "## ${heading}" section`);
+  if (kind === "explore" && status === "done")
+    for (const heading of ["Tickets", "Not yet specified"])
+      if (items(body, heading).length > 0)
+        errors.push(`${id}: a done explore leaf has no ${heading} left`);
   return {
     id,
     title: title as string,
     parent: parent as string | null,
     dependsOn: dependsOn as string[],
+    kind: kind as Kind,
     status: status as Status,
-    openQuestions: countOpenQuestions(text.slice(match[0].length)),
-    body: text.slice(match[0].length),
+    openTickets: countOpenTickets(body),
+    body,
     children: [],
   };
 }
@@ -129,7 +179,10 @@ export function loadPlan(projectRoot: string): Plan {
 
   const root = nodes.get("root");
   if (!root) errors.push("root: plan/nodes/root.md is missing or invalid");
-  else if (root.parent !== null) errors.push("root: parent must be null");
+  else {
+    if (root.parent !== null) errors.push("root: parent must be null");
+    if (root.kind !== "goal") errors.push("root: kind must be goal");
+  }
 
   for (const node of nodes.values()) {
     if (node.parent === null) {
@@ -137,8 +190,13 @@ export function loadPlan(projectRoot: string): Plan {
         errors.push(`${node.id}: only root has a null parent`);
     } else {
       const parent = nodes.get(node.parent);
-      if (parent) parent.children.push(node);
-      else errors.push(`${node.id}: parent "${node.parent}" does not exist`);
+      if (!parent)
+        errors.push(`${node.id}: parent "${node.parent}" does not exist`);
+      else if (parent.kind !== "goal")
+        errors.push(
+          `${node.id}: parent "${node.parent}" is a leaf (${parent.kind}); only goals have children`,
+        );
+      else parent.children.push(node);
     }
     for (const dependency of node.dependsOn) {
       if (dependency === node.id) errors.push(`${node.id}: depends on itself`);
@@ -162,19 +220,17 @@ export function loadPlan(projectRoot: string): Plan {
 
   for (const node of nodes.values()) {
     node.children.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    const unfinished = node.children.some((child) => !finished(child));
-    if (
-      (node.status === "ready" || node.status === "in_progress") &&
-      unfinished
-    )
-      errors.push(
-        `${node.id}: ${node.status} needs every child to be done or cancelled`,
-      );
-    if (node.status === "decomposed" && node.children.length === 0)
-      errors.push(`${node.id}: decomposed needs child nodes`);
-    if (node.status === "done" && unfinished)
+    if (node.status === "done" && !node.children.every(finished))
       errors.push(`${node.id}: done needs every child to be done or cancelled`);
   }
+
+  const collaborating = [...nodes.values()].filter(
+    (n) => n.kind === "collaborative" && n.status === "in_progress",
+  );
+  if (collaborating.length > 1)
+    errors.push(
+      `${collaborating.map((n) => n.id).join(", ")}: at most one collaborative leaf may be in_progress`,
+    );
 
   return { root, nodes, errors };
 }
@@ -194,57 +250,57 @@ function checkedRoot(plan: Plan): PlanNode {
   return plan.root;
 }
 
-const plural = (count: number, word: string) =>
-  `${count} ${word}${count === 1 ? "" : "s"}`;
+const plural = (count: number, word: string, words = `${word}s`) =>
+  `${count} ${count === 1 ? word : words}`;
 
-function describe(node: PlanNode, nodes: Map<string, PlanNode>): string {
-  const parts: string[] = [node.status];
-  if (node.openQuestions > 0)
-    parts.push(plural(node.openQuestions, "open question"));
-  const waiting = waitingFor(node, nodes);
-  if (waiting.length > 0 && !finished(node))
-    parts.push(`waits for ${waiting.join(", ")}`);
+/** The status, or for an open goal the state computed from its children. */
+const state = (node: PlanNode) =>
+  needsPlanning(node)
+    ? "needs planning"
+    : closable(node)
+      ? "closable"
+      : node.status;
+
+/** Kind, state, and open tickets, for places that show waiting in another way. */
+function summary(node: PlanNode): string {
+  const parts = [node.kind, state(node)];
+  if (node.openTickets > 0) parts.push(plural(node.openTickets, "open ticket"));
   return parts.join(", ");
 }
 
-/** Status and open questions, for places that show waiting in another way. */
-const summary = (node: PlanNode) =>
-  node.openQuestions > 0
-    ? `${node.status}, ${plural(node.openQuestions, "open question")}`
-    : node.status;
+function describe(node: PlanNode, nodes: Map<string, PlanNode>): string {
+  const waiting = finished(node) ? [] : waitingFor(node, nodes);
+  return waiting.length > 0
+    ? `${summary(node)}, waits for ${waiting.join(", ")}`
+    : summary(node);
+}
 
-/** Dispatched nodes, which belong to their implementation sessions. */
+/** Leaves being worked: blackbox leaves by their implementation sessions, the rest by the lead session. */
 const running = (plan: Plan) =>
   treeOrder(checkedRoot(plan)).filter((n) => n.status === "in_progress");
 
-/** The "Now possible" groups of the main flow, in the order dev-next takes them. */
+/** The "Now possible" groups of the lead session, in the order dev-next takes them. */
 function possibleWork(plan: Plan): [string, PlanNode[]][] {
   const order = treeOrder(checkedRoot(plan));
   const unblocked = (node: PlanNode) =>
     waitingFor(node, plan.nodes).length === 0;
+  const startable = (kind: Kind) =>
+    order.filter((n) => n.kind === kind && n.status === "todo" && unblocked(n));
   const groups: [string, PlanNode[]][] = [
-    [
-      "Close",
-      order.filter(
-        (n) => n.status === "decomposed" && n.children.every(finished),
-      ),
-    ],
-    ["Dispatch", order.filter((n) => n.status === "ready" && unblocked(n))],
-    [
-      "Explore",
-      order.filter(
-        (n) => (n.status === "fog" || n.status === "exploring") && unblocked(n),
-      ),
-    ],
+    ["Close", order.filter(closable)],
+    ["Plan", order.filter((n) => needsPlanning(n) && unblocked(n))],
+    ["Explore", startable("explore")],
+    ["Collaborate", startable("collaborative")],
+    ["Dispatch", startable("blackbox")],
   ];
   return groups.filter(([, list]) => list.length > 0);
 }
 
-/** Leaf nodes, the units of work, and how far they have come. */
+/** Leaves, the units of work, and how far they have come. */
 function progress(plan: Plan) {
   const all = [...plan.nodes.values()];
   const leaves = all.filter(
-    (n) => n.children.length === 0 && n.status !== "cancelled",
+    (n) => n.kind !== "goal" && n.status !== "cancelled",
   );
   const counts = STATUSES.filter((s) => s !== "cancelled")
     .map((status) => ({
@@ -259,17 +315,26 @@ function progress(plan: Plan) {
     open: counts
       .filter(({ status }) => status !== "done")
       .map(({ status, count }) => `${count} ${status}`),
-    questions: all.reduce((sum, n) => sum + n.openQuestions, 0),
+    planning: all.filter(needsPlanning).length,
+    tickets: all.reduce((sum, n) => sum + n.openTickets, 0),
   };
 }
 
-function progressLine(plan: Plan): string {
-  const { done, total, open, questions } = progress(plan);
-  const breakdown = open.length > 0 ? ` (${open.join(", ")})` : "";
-  return `Progress: ${done} of ${plural(total, "leaf node")} done${breakdown}; ${plural(questions, "open question")}`;
+function progressFacts(plan: Plan): string[] {
+  const { planning, tickets } = progress(plan);
+  return [
+    `${plural(planning, "goal needs", "goals need")} planning`,
+    plural(tickets, "open ticket"),
+  ];
 }
 
-/** The unfinished leaves of a node: the node itself when it is a leaf. */
+function progressLine(plan: Plan): string {
+  const { done, total, open } = progress(plan);
+  const breakdown = open.length > 0 ? ` (${open.join(", ")})` : "";
+  return `Progress: ${done} of ${plural(total, "leaf", "leaves")} done${breakdown}; ${progressFacts(plan).join("; ")}`;
+}
+
+/** The unfinished nodes without children under a node: the node itself when it has none. */
 function unfinishedLeaves(plan: Plan, id: string): PlanNode[] {
   const node = plan.nodes.get(id);
   if (!node || finished(node)) return [];
@@ -277,7 +342,7 @@ function unfinishedLeaves(plan: Plan, id: string): PlanNode[] {
   return node.children.flatMap((child) => unfinishedLeaves(plan, child.id));
 }
 
-/** The unfinished leaves a leaf waits for; waiting for a parent means waiting for its unfinished leaves. */
+/** The unfinished work a node waits for; waiting for a goal means waiting for its unfinished leaves. */
 const waitedLeaves = (plan: Plan, node: PlanNode): PlanNode[] => [
   ...new Set(
     node.dependsOn
@@ -287,8 +352,8 @@ const waitedLeaves = (plan: Plan, node: PlanNode): PlanNode[] => [
 ];
 
 /**
- * Unfinished leaf nodes in steps: each node comes one step after the latest work it waits for.
- * Waiting for a parent means waiting for its unfinished leaves.
+ * Unfinished leaves and goals that need planning, in steps: each comes one step after the latest work it waits for.
+ * Waiting for a goal means waiting for its unfinished leaves.
  */
 export function orderSteps(plan: Plan): PlanNode[][] {
   const leaves = treeOrder(checkedRoot(plan)).filter(
@@ -340,7 +405,7 @@ export function renderMap(plan: Plan): string {
   const steps = orderSteps(plan).map(
     (group, index) => `${index + 1}. ${group.map(link).join(", ")}`,
   );
-  const dispatched = running(plan);
+  const working = running(plan);
 
   return [
     "# Plan Map",
@@ -353,13 +418,13 @@ export function renderMap(plan: Plan): string {
     ...tree,
     "```",
     "",
-    ...(dispatched.length > 0
+    ...(working.length > 0
       ? [
           "## Running",
           "",
-          "Dispatched to implementation sessions; review each when its report arrives.",
+          "Leaves being worked. Review a blackbox leaf when its report arrives.",
           "",
-          ...dispatched.map((node) => `- ${link(node)}`),
+          ...working.map((node) => `- ${link(node)} (${node.kind})`),
           "",
         ]
       : []),
@@ -371,9 +436,9 @@ export function renderMap(plan: Plan): string {
     "",
     "## Order",
     "",
-    "Unfinished leaf nodes in dependency order. Nodes in one step do not wait for each other.",
+    "Unfinished leaves and goals that need planning, in dependency order. Nodes in one step do not wait for each other.",
     "",
-    ...(steps.length > 0 ? steps : ["- Nothing: every leaf node is finished."]),
+    ...(steps.length > 0 ? steps : ["- Nothing: all work is finished."]),
     "",
   ].join("\n");
 }
@@ -483,17 +548,6 @@ function blocks(lines: string[]): string {
   return out.join("\n");
 }
 
-/** The node's H2 sections, in order. */
-function sections(body: string): { heading: string; lines: string[] }[] {
-  const result: { heading: string; lines: string[] }[] = [];
-  for (const line of body.split(/\r?\n/)) {
-    if (line.startsWith("## "))
-      result.push({ heading: line.slice(3).trim(), lines: [] });
-    else result.at(-1)?.lines.push(line);
-  }
-  return result;
-}
-
 function criteria(node: PlanNode): { met: number; total: number } {
   const lines =
     sections(node.body).find((s) => s.heading === "Completion criteria")
@@ -509,9 +563,9 @@ function criteria(node: PlanNode): { met: number; total: number } {
 
 const STYLE = `
 :root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --muted: #59636e; --line: #d1d9e0; --panel: #f6f8fa;
-  --fog: #818b98; --exploring: #9a6700; --decomposed: #1b7c83; --ready: #1a7f37; --in_progress: #0969da; --done: #8250df; --cancelled: #818b98; }
+  --open: #1b7c83; --todo: #1a7f37; --in_progress: #0969da; --done: #8250df; --cancelled: #818b98; }
 @media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #3d444d; --panel: #151b23;
-  --fog: #9198a1; --exploring: #d29922; --decomposed: #39c5cf; --ready: #3fb950; --in_progress: #4493f8; --done: #ab7df8; --cancelled: #9198a1; } }
+  --open: #39c5cf; --todo: #3fb950; --in_progress: #4493f8; --done: #ab7df8; --cancelled: #9198a1; } }
 * { box-sizing: border-box; }
 body { margin: 0 auto; max-width: 72rem; padding: 1.5rem 1rem 3rem; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; }
 h1 { margin: 0; font-size: 1.6rem; } h2 { font-size: 1.05rem; margin: 2rem 0 0.75rem; } h3 { margin: 0; font-size: 1.2rem; }
@@ -523,8 +577,7 @@ a { color: inherit; }
 .bar { display: flex; height: 0.6rem; background: var(--panel); border: 1px solid var(--line); border-radius: 1rem; margin: 0.75rem 0 0.25rem; overflow: hidden; }
 .bar span { height: 100%; background: var(--c); }
 .legend { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; list-style: none; padding: 0; margin: 0.5rem 0 0; }
-.fog { --c: var(--fog); } .exploring { --c: var(--exploring); } .decomposed { --c: var(--decomposed); } .ready { --c: var(--ready); }
-.in_progress { --c: var(--in_progress); } .done { --c: var(--done); } .cancelled { --c: var(--cancelled); }
+.open { --c: var(--open); } .todo { --c: var(--todo); } .in_progress { --c: var(--in_progress); } .done { --c: var(--done); } .cancelled { --c: var(--cancelled); }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
 .status { color: var(--c); font-size: 0.85rem; }
 .dot { display: inline-block; flex: none; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--c); border: 2px solid var(--c); margin-right: 0.4rem; }
@@ -624,8 +677,8 @@ export function renderHtml(plan: Plan, changes: Change[] = []): string {
   const root = checkedRoot(plan);
   const order = treeOrder(root);
   const possible = possibleWork(plan);
-  const dispatched = running(plan);
-  const { done, total, counts, open, questions } = progress(plan);
+  const working = running(plan);
+  const { done, total, counts, open } = progress(plan);
   const met = order.reduce((sum, n) => sum + criteria(n).met, 0);
   const allCriteria = order.reduce((sum, n) => sum + criteria(n).total, 0);
   const neededBy = (node: PlanNode) =>
@@ -663,7 +716,7 @@ export function renderHtml(plan: Plan, changes: Change[] = []): string {
   const detail = (node: PlanNode) => {
     const { met: nodeMet, total: nodeTotal } = criteria(node);
     const facts = [
-      `<span class="status ${node.status}">${node.status}</span>`,
+      `<span class="status ${node.status}">${escapeHtml(summary(node))}</span>`,
       `plan/nodes/${escapeHtml(node.id)}.md`,
       nodeTotal > 0 ? `${nodeMet} of ${nodeTotal} criteria met` : "",
     ].filter((fact) => fact !== "");
@@ -719,15 +772,15 @@ ${body}
 <h1>${escapeHtml(root.title)}</h1>
 <p class="muted">Generated from <code>plan/nodes/</code> by <code>.agents/skills/dev-framework/scripts/map.ts</code>. Do not edit.</p>
 <div class="bar">${segments}</div>
-<p>${done} of ${plural(total, "leaf node")} done${open.length > 0 ? ` · ${escapeHtml(open.join(", "))}` : ""} · ${plural(questions, "open question")} · ${met} of ${allCriteria} criteria met</p>
+<p>${done} of ${plural(total, "leaf", "leaves")} done${open.length > 0 ? ` · ${escapeHtml(open.join(", "))}` : ""} · ${progressFacts(plan).join(" · ")} · ${met} of ${allCriteria} criteria met</p>
 <ul class="legend">${legend}<li class="muted"><span class="badge">waits for N</span> blocked by unfinished work</li></ul>
 </header>
 <main>
 ${
-  dispatched.length > 0
+  working.length > 0
     ? `<h2>Running</h2>
-<p class="muted">Dispatched to implementation sessions; review each when its report arrives.</p>
-<ul class="possible">${dispatched.map((n) => `<li>${card(n)}</li>`).join("")}</ul>`
+<p class="muted">Leaves being worked. Review a blackbox leaf when its report arrives.</p>
+<ul class="possible">${working.map((n) => `<li>${card(n)}</li>`).join("")}</ul>`
     : ""
 }
 <h2>Now possible</h2>
@@ -742,7 +795,7 @@ ${
     : '<p class="muted">Nothing: every open node is blocked or finished.</p>'
 }
 <h2>Order</h2>
-<p class="muted">Unfinished leaf nodes in dependency order. Nodes in one step do not wait for each other; an arrow leads from work to the work that waits for it. Select a node to see its details: a dashed outline marks the work it waits for, a dotted outline the work that waits for it.</p>
+<p class="muted">Unfinished leaves and goals that need planning, in dependency order. Nodes in one step do not wait for each other; an arrow leads from work to the work that waits for it. Select a node to see its details: a dashed outline marks the work it waits for, a dotted outline the work that waits for it.</p>
 <div class="graph">
 <svg class="edges" aria-hidden="true"></svg>
 <ol class="steps">${orderSteps(plan)
