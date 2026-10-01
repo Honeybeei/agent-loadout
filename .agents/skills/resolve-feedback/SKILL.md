@@ -1,6 +1,6 @@
 ---
 name: resolve-feedback
-description: Resolve loadout-feedback reports in the agent-loadout repository. Read them, grill the user until each problem and its fix are clear, then apply and publish the change. Takes a report file or a directory of reports.
+description: Resolve loadout-feedback reports in the agent-loadout repository. Read them, grill the user until each problem and its fix are clear, then apply and publish the change. Takes report files, a directory of reports, or pasted report text.
 disable-model-invocation: true
 ---
 
@@ -10,8 +10,8 @@ Turn feedback reports into changes to this repository's material. Each report re
 
 ## 1. Collect
 
-- The arguments are report files, or directories whose `*.md` files, not their subdirectories, are all reports. Read each report completely.
-- When a path cannot be read, or a file is not in the `loadout-feedback` report format, say so and leave it out.
+- The arguments are report files, directories whose `*.md` files, not their subdirectories, are all reports, or report text the user pasted, often from another machine. Read each report completely.
+- When a path cannot be read, a pasted report is cut off, or a text is not in the `loadout-feedback` report format, say so. Ask for the missing text, or leave the report out.
 
 ## 2. Triage
 
