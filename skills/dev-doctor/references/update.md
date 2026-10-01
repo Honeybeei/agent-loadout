@@ -7,8 +7,13 @@ Bring a Framework project up to the installed Framework. Sync replaces managed m
 - Show what sync would change: the `Managed material` findings.
 - When sync is blocked, show how to clear each problem: commit or stash the listed changes, move skills out of a real `.claude/skills/` directory into `.agents/skills/`, or repair the section markers.
 - When `plan/` has uncommitted changes, ask the user to commit or set them aside first. The map script regenerates the map from the working tree, so the update's map would carry them.
-- List the branches other than `main`, `impl/*`, `parked/*`, and `prototype/*`, which [Git workflow](../../dev-framework/project/knowledge/dev-framework/git-workflow.md#branches) no longer uses, with whether each is merged into `main`. Propose deleting the merged ones, and ask about the others.
-- List `in_progress` nodes without a `Dispatched` Record line: an earlier Framework implemented them in place. Recommend finishing and merging each on its old branch before the update, or setting it back to `ready` after the update so it can be dispatched.
+- List the branches other than `main`, `impl/*`, and `prototype/*`, which [Git workflow](../../dev-framework/project/knowledge/dev-framework/git-workflow.md#branches) no longer uses, such as `parked/*`, with whether each is merged into `main`. Propose deleting the merged ones, and ask about the others.
+- When `plan/nodes/` holds nodes without a `kind` field, the Plan was written for an earlier Framework without node kinds. There is no migration; the project starts a new Plan:
+  1. Before the update, finish or discard each running implementation: its `impl/*` branch and worktree.
+  2. After sync, empty `plan/nodes/` and write a new `root` goal with the old root's title and Goal. Deleting the old nodes needs the user's approval; Git history keeps them.
+  3. Project Knowledge stays, and may be changed where the new rules need it.
+
+  `dev-next` then recommends planning the root.
 - Say that the check menu follows the update, because the checks read the project's copy of the rules.
 
 ## Apply
@@ -20,6 +25,7 @@ Run on `main` in the main checkout. When `impl/*` branches exist, implementation
 
    | Finding | Migration |
    | --- | --- |
-   | Plan: unknown frontmatter fields or old status values | Keep the four node fields, move other content into the node body, and recommend a status for each node |
+   | Plan: nodes without `kind` | Start a new Plan, as Propose says |
+   | Plan: unknown frontmatter fields | Keep the five node fields, and move other content into the node body |
    | Links to paths an earlier Framework used | Point them to `knowledge/dev-framework/` |
    | Leftovers | Migrate what the project still needs, then delete the rest after approval |

@@ -1,65 +1,70 @@
 ---
 name: dev-explore
-description: Explore a node of a Dev Framework project's Plan. Chart its subtree breadth-first, then resolve its open questions with the user. Takes a node name, root by default.
+description: Run an explore leaf of a Dev Framework project's Plan. Chart its wayfinding map, resolve its tickets with the user, and once the way is clear, apply the decisions and plan the goals they affect. Takes an explore leaf name.
 disable-model-invocation: true
 ---
 
 # Dev Explore
 
-Turn an unclear part of the Plan into a clear subtree: nodes that are ready to dispatch, nodes split into children, and unknowns honestly marked as fog. Explore belongs to the main flow; it decides and records, and does not implement product code.
+Find the way: turn low-resolution ideas, concepts, flows, and designs into decisions, so the goal the leaf serves can be planned. Explore produces decisions, not deliverables. While it runs, the explore node is the only record; Knowledge and the rest of the Plan change once, when it finishes.
 
-The project's rules are indexed in [Dev Framework rules](../../../knowledge/dev-framework.md). Before writing to the Plan, read [Plan documentation](../../../knowledge/dev-framework/plan-documentation.md): it owns node format, status, and how answers are recorded. Before the first commit, read [Git workflow](../../../knowledge/dev-framework/git-workflow.md#commits): every recorded answer, structure change, and Goal change is its own commit on `main`.
+The project's rules are indexed in [Dev Framework rules](../../../knowledge/dev-framework.md). Before writing to the node, read [Explore nodes](../../../knowledge/dev-framework/plan-documentation/explore.md): it owns the template, the tickets, and the fog-or-ticket test. Commits follow [Git workflow](../../../knowledge/dev-framework/git-workflow.md#commits).
 
 ## 1. Orient
 
 - Confirm the project root has `dev.yaml` and `knowledge/dev-framework.md`. Otherwise, suggest `dev-doctor` and stop.
-- Confirm the session is at the main checkout on `main`, as [Development workflow](../../../knowledge/dev-framework/workflow.md) says. Otherwise, say so and stop.
-- The target is the node named in the arguments, or `root` when none is given. A dispatched node (`in_progress`) belongs to its implementation session: say so, and suggest another branch of the tree, or reviewing that node once its report arrives.
-- Read `plan/map.md`, the target node, its ancestors' Goal sections, the glossary if it exists, and the Knowledge the target relies on. If the map is missing or stale, regenerate it first (see [Map](#map)).
+- Confirm the session is at the main checkout on `main`. Otherwise, say so and stop.
+- The target is the explore leaf named in the arguments. When it is another kind, or `done` or `cancelled`, say so and follow [dev-next](../dev-next/SKILL.md).
+- The lead session runs one leaf at a time. When another explore or collaborative leaf is `in_progress`, say so, and ask whether to continue that one instead.
+- Read `plan/map.md`, the target, the goal it serves and its ancestors' Goal sections, the glossary if it exists, and the Knowledge its area relies on. If the map is missing or stale, regenerate it first (see [Map](#map)).
+- Set a `todo` target to `in_progress`. Its finishing commit carries the change.
+- A target that already has tickets, decisions, or fog continues at step 3.
 
 ## 2. Chart
 
-Skip this step when the target already has a clear subtree.
+1. **Name the destination.** Settle with the user, through [grilling](../grilling/SKILL.md), what this leaf must decide and which planning it enables. Write it as the Goal; it fixes the scope.
+2. **Map the frontier.** Grill again, breadth-first: cover the whole destination before going deep on any part.
+3. **Write the map.** Make each question that can be stated precisely now a ticket, with its tag and any `blocked by`. Put the rest of the in-scope fog under Not yet specified, topics with their own destination under For the Plan, and work beyond the destination under Out of scope.
+4. **Start research.** Run a subagent per `research` ticket by [research](../research/SKILL.md), in parallel.
 
-1. Interview the user breadth-first with [grilling](../grilling/SKILL.md): cover the target's whole scope (its parts, what is known, what is not) before going deep on any branch.
-2. Write what became clear, immediately:
-   - the target's Goal, known Completion criteria, and status;
-   - child nodes, as many levels deep as they are clear;
-   - for each node: its status, open questions, Not yet specified, and Out of scope.
-3. Give an unclear area that can be named its own `fog` node. Do not split fog into guessed pieces.
-4. Regenerate the map, show the changed part of the tree, and offer the commit (`chart`).
+When charting finds nothing to decide, the way is already clear: go to step 4.
 
 ## 3. Resolve
 
-Work the open questions in the target's subtree, leaving dispatched nodes alone. Take unblocked questions first, starting with those that block the most other work.
+Work the unblocked tickets, starting with those that block the most others:
 
 | Tag | How to resolve |
 | --- | --- |
-| `research` | Run a subagent per question by [research](../research/SKILL.md), in parallel when there are several. Keep raw notes in `.tmp/research/<topic>.md`. |
 | `grilling` | Follow [grilling](../grilling/SKILL.md). Only the user answers. |
+| `research` | Run a subagent per ticket by [research](../research/SKILL.md), in parallel when there are several. Keep raw notes in `.tmp/research/<topic>.md`. |
 | `prototype` | Follow [prototype](../prototype/SKILL.md). Build in `.tmp/prototypes/<name>/`, or on a `prototype/<name>` branch when it must run inside the app. The user makes the choice it informs. |
 | `task` | Do the work when allowed below; otherwise give the user a precise checklist. |
 
-After each answer:
+After each answer, update only this node, at once:
 
-1. Record it at once, as Plan documentation's "Recording resolved questions" says, and remove the question from the node.
-2. Add a glossary entry when the user agreed on a term.
-3. Turn anything that became clear into new nodes or new questions, and remove it from Not yet specified.
-4. When a node has no open questions and nothing left unspecified, set it to `ready` if one piece of work can implement and verify it, or split it and set it to `decomposed`.
-5. Regenerate the map when frontmatter or open questions changed.
-6. Offer the commit for this answer: `decide`, or `chart` when it split the node. When it changes a Knowledge document that an `in_progress` node relies on, name those nodes in the same prompt and recommend no effect, notify, or recall for each, as Development workflow's "Changing Knowledge while implementations run" says. For a recall, continue with [dev-review](../dev-review/SKILL.md) on that node after the commit.
+1. Remove the ticket, and add `<question gist> → <answer gist>` to Decisions so far. A term the user agreed on is a decision too; its owner is the glossary.
+2. Turn fog the answer made specific into tickets, and remove it from Not yet specified. Add new questions as tickets, new topics with their own destination to For the Plan, and work beyond the destination to Out of scope.
+3. When the answer reverses an earlier decision, replace that line.
 
-## 4. Stop
+Stop when no ticket can be resolved now, or when the user says so. Summarize what is left; the next run continues from the node.
 
-Stop when no open question in the target's subtree can be resolved now, or when the user says so. Everything is already in the Plan, so the next run continues from the map.
+## 4. Finish
 
-Offer a commit for anything still uncommitted, then follow [dev-next](../dev-next/SKILL.md).
+Finish when Tickets and Not yet specified are empty. When the user ends the explore earlier, first move what remains to For the Plan or Out of scope.
+
+1. **Show the changes.** List each decision with the owner it will go to, as Plan documentation's [Recording decisions](../../../knowledge/dev-framework/plan-documentation.md#recording-decisions) says, and what For the Plan will change. The user confirms.
+2. **Apply the decisions.** Write each decision into its owner, and link the owner from its line in Decisions so far.
+3. **Plan.** Follow [dev-plan](../dev-plan/SKILL.md) step 2 for the goals the results affect, applying For the Plan, and link each item there to the node it became.
+4. **Close the leaf.** Set it `done`, add `Finished: <where the decisions went>, <what planning changed>` to Record, and regenerate the map.
+5. **Commit once.** Offer one commit with the node, Knowledge, and Plan changes: `plan(<node>): <what was decided and planned>`. When it changes a Knowledge document that an `in_progress` blackbox leaf relies on, name those leaves in the same prompt and recommend no effect, notify, or recall for each, as Development workflow's [Changing Knowledge while blackbox leaves run](../../../knowledge/dev-framework/workflow.md#changing-knowledge-while-blackbox-leaves-run) says. For a recall, continue with [dev-blackbox-review](../dev-blackbox-review/SKILL.md) on that leaf after the commit.
+
+Then follow [dev-next](../dev-next/SKILL.md).
 
 ## Authority
 
 | Without asking | Ask first | Always separate |
 | --- | --- | --- |
-| Reading; research subagents; adding and editing nodes in the target's subtree, except dispatched ones; recording the user's answers in Plan and Knowledge; regenerating the map; `.tmp/` material | Each commit; changing nodes outside the target's subtree; changing a Goal or Completion criteria the user set | Merges, pushes; installs; external services; destructive or hard-to-reverse actions; product code outside prototypes; setting a node `done` |
+| Reading; research subagents; editing this explore node; regenerating the map; `.tmp/` material | Changing the Goal once the user set it; the finishing changes to Knowledge and the Plan; the commit | Editing Knowledge or other nodes before finishing; product code outside prototypes; merges, pushes; installs; external services; destructive or hard-to-reverse actions |
 
 ## Map
 

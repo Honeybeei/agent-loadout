@@ -27,11 +27,11 @@ Commit message: `chore: adopt the Dev Framework`.
    | Workspace `README.md` | Purpose and responsibilities, for each declared workspace other than `.` |
    | `knowledge/README.md` | A title and a line saying it indexes the project's Knowledge |
    | `plan/README.md` | How to read the Plan, with links to `map.md` and to the managed Plan documentation |
-   | `plan/nodes/root.md` | A node with the agreed title and Goal, `parent: null`, `depends_on: []`, and `status: fog` |
+   | `plan/nodes/root.md` | A goal node with the agreed title and Goal, `parent: null`, `depends_on: []`, `kind: goal`, and `status: open` |
    | `README.md` | A short project introduction, only when the file is missing. Add links to `AGENTS.md`, `knowledge/README.md`, and `plan/README.md` when it lacks them, as the [README and AGENTS guideline](../../dev-framework/project/knowledge/dev-framework/readme-agents-guideline.md#responsibilities) requires. |
    | `.gitignore` | A `/.tmp/` line, if it is missing |
    | `AGENTS.md` | The agreed setup commands and automated checks, kept outside the managed section; sync adds the section afterward |
 
 2. Run sync, then the map script. Sync adds the managed sections to `README.md` and `AGENTS.md`, creating `AGENTS.md` when it is missing. It also links `.claude/skills` to `../.agents/skills`, because Claude Code reads project skills only from `.claude/skills/`.
 
-After adoption, `dev-next` usually recommends exploring the root.
+After adoption, `dev-next` usually recommends planning the root.

@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  countOpenQuestions,
+  countOpenTickets,
   loadPlan,
   orderSteps,
   renderHtml,
@@ -32,6 +32,7 @@ interface Fields {
   title?: string;
   parent?: string | null;
   depends_on?: string[];
+  kind?: string;
   status?: string;
   [extra: string]: unknown;
 }
@@ -42,6 +43,10 @@ function node(fields: Fields, body = ""): string {
     .join("\n");
   return `---\n${yaml}\n---\n\n# ${fields.title ?? "Untitled"}\n\n## Goal\nA goal.\n${body}`;
 }
+
+/** The sections every blackbox node needs, with the given Completion criteria. */
+const blackbox = (criteria = "") =>
+  `\n## Output\nA result.\n\n## Completion criteria\n${criteria}\n## Verification\n- Run it.\n\n## Record\n`;
 
 function project(nodes: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), "dev-map-"));
@@ -61,36 +66,44 @@ function run(...args: string[]) {
   };
 }
 
+const goal = (
+  title: string,
+  parent: string | null,
+  depends_on: string[] = [],
+) => node({ title, parent, depends_on, kind: "goal", status: "open" });
+
 const sample = {
-  root: node({
-    title: "Product",
-    parent: null,
-    depends_on: [],
-    status: "decomposed",
-  }),
-  apps: node({
-    title: "Apps",
-    parent: "root",
-    depends_on: [],
-    status: "decomposed",
-  }),
-  desktop: node(
-    { title: "Desktop", parent: "apps", depends_on: [], status: "exploring" },
-    "\n## Open questions\n- [grilling] One?\n- [research] Two?\n",
+  root: goal("Product", null),
+  apps: goal("Apps", "root"),
+  desktop: goal("Desktop", "apps"),
+  "explore-desktop": node(
+    {
+      title: "Explore desktop",
+      parent: "desktop",
+      depends_on: [],
+      kind: "explore",
+      status: "todo",
+    },
+    "\n## Tickets\n- [grilling] One?\n- [research] Two?\n",
   ),
-  setup: node({
-    title: "Setup",
-    parent: "desktop",
-    depends_on: [],
-    status: "ready",
-  }),
+  setup: node(
+    {
+      title: "Setup",
+      parent: "desktop",
+      depends_on: [],
+      kind: "blackbox",
+      status: "todo",
+    },
+    blackbox(),
+  ),
   chat: node({
     title: "Chat",
     parent: "desktop",
     depends_on: ["setup"],
-    status: "ready",
+    kind: "collaborative",
+    status: "todo",
   }),
-  web: node({ title: "Web", parent: "root", depends_on: [], status: "fog" }),
+  web: goal("Web", "root"),
 };
 
 describe("renderMap", () => {
@@ -103,80 +116,111 @@ describe("renderMap", () => {
         "",
         "Generated from `plan/nodes/` by `.agents/skills/dev-framework/scripts/map.ts`. Do not edit. Open `.tmp/plan/map.html` in a browser for the full picture.",
         "",
-        "Progress: 0 of 3 leaf nodes done (1 fog, 2 ready); 2 open questions",
+        "Progress: 0 of 3 leaves done (3 todo); 1 goal needs planning; 2 open tickets",
         "",
         "```text",
-        "root: Product — decomposed",
-        "├── apps: Apps — decomposed",
-        "│   └── desktop: Desktop — exploring, 2 open questions",
-        "│       ├── chat: Chat — ready, waits for setup",
-        "│       └── setup: Setup — ready",
-        "└── web: Web — fog",
+        "root: Product — goal, open",
+        "├── apps: Apps — goal, open",
+        "│   └── desktop: Desktop — goal, open",
+        "│       ├── chat: Chat — collaborative, todo, waits for setup",
+        "│       ├── explore-desktop: Explore desktop — explore, todo, 2 open tickets",
+        "│       └── setup: Setup — blackbox, todo",
+        "└── web: Web — goal, needs planning",
         "```",
         "",
         "## Now possible",
         "",
+        "- Plan: [Web](nodes/web.md)",
+        "- Explore: [Explore desktop](nodes/explore-desktop.md)",
         "- Dispatch: [Setup](nodes/setup.md)",
-        "- Explore: [Desktop](nodes/desktop.md), [Web](nodes/web.md)",
         "",
         "## Order",
         "",
-        "Unfinished leaf nodes in dependency order. Nodes in one step do not wait for each other.",
+        "Unfinished leaves and goals that need planning, in dependency order. Nodes in one step do not wait for each other.",
         "",
-        "1. [Setup](nodes/setup.md), [Web](nodes/web.md)",
+        "1. [Explore desktop](nodes/explore-desktop.md), [Setup](nodes/setup.md), [Web](nodes/web.md)",
         "2. [Chat](nodes/chat.md)",
         "",
       ].join("\n"),
     );
   });
 
-  test("lists dispatched nodes as running, apart from the work possible now", () => {
+  test("lists leaves in progress as running, apart from the work possible now", () => {
     const plan = loadPlan(
       project({
         ...sample,
-        setup: node({
-          title: "Setup",
-          parent: "desktop",
-          depends_on: [],
-          status: "in_progress",
-        }),
+        setup: node(
+          {
+            title: "Setup",
+            parent: "desktop",
+            depends_on: [],
+            kind: "blackbox",
+            status: "in_progress",
+          },
+          blackbox(),
+        ),
       }),
     );
     const map = renderMap(plan);
     expect(map).toContain(
-      "## Running\n\nDispatched to implementation sessions; review each when its report arrives.\n\n- [Setup](nodes/setup.md)\n\n## Now possible",
+      "## Running\n\nLeaves being worked. Review a blackbox leaf when its report arrives.\n\n- [Setup](nodes/setup.md) (blackbox)\n\n## Now possible",
     );
     expect(map).not.toContain("Dispatch: [Setup]");
     expect(renderMap(loadPlan(project(sample)))).not.toContain("## Running");
     const html = renderHtml(plan);
     expect(html).toContain("<h2>Running</h2>");
-    expect(html).toContain('<body data-start="desktop">');
+    expect(html).toContain('<body data-start="web">');
   });
 
-  test("lists a decomposed node whose children are finished as closable", () => {
+  test("lists a goal whose children are finished as closable", () => {
     const plan = loadPlan(
       project({
-        root: node({
-          title: "Product",
-          parent: null,
-          depends_on: [],
-          status: "decomposed",
-        }),
+        root: goal("Product", null),
         one: node({
           title: "One",
           parent: "root",
           depends_on: [],
+          kind: "collaborative",
           status: "done",
         }),
         two: node({
           title: "Two",
           parent: "root",
           depends_on: [],
+          kind: "explore",
           status: "cancelled",
         }),
       }),
     );
-    expect(renderMap(plan)).toContain("- Close: [Product](nodes/root.md)");
+    const map = renderMap(plan);
+    expect(map).toContain("root: Product — goal, closable");
+    expect(map).toContain("- Close: [Product](nodes/root.md)");
+  });
+
+  test("lists collaborative leaves to start, and leaves blocked goals out of planning", () => {
+    const map = renderMap(
+      loadPlan(
+        project({
+          ...sample,
+          web: goal("Web", "root", ["explore-desktop"]),
+          setup: node(
+            {
+              title: "Setup",
+              parent: "desktop",
+              depends_on: [],
+              kind: "blackbox",
+              status: "done",
+            },
+            blackbox(),
+          ),
+        }),
+      ),
+    );
+    expect(map).toContain("- Collaborate: [Chat](nodes/chat.md)");
+    expect(map).not.toContain("- Plan:");
+    expect(map).toContain(
+      "└── web: Web — goal, needs planning, waits for explore-desktop",
+    );
   });
 });
 
@@ -184,37 +228,48 @@ describe("orderSteps", () => {
   const ids = (root: string) =>
     orderSteps(loadPlan(root)).map((step) => step.map((n) => n.id));
 
-  test("waiting for a parent means waiting for its unfinished leaves", () => {
+  test("waiting for a goal means waiting for its unfinished leaves", () => {
     const root = project({
       ...sample,
-      launch: node({
-        title: "Launch",
-        parent: "root",
-        depends_on: ["apps"],
-        status: "fog",
-      }),
+      launch: goal("Launch", "root", ["apps"]),
     });
-    expect(ids(root)).toEqual([["setup", "web"], ["chat"], ["launch"]]);
+    expect(ids(root)).toEqual([
+      ["explore-desktop", "setup", "web"],
+      ["chat"],
+      ["launch"],
+    ]);
   });
 
   test("leaves out finished nodes and the waits they end", () => {
     const root = project({
       ...sample,
-      setup: node({
-        title: "Setup",
-        parent: "desktop",
-        depends_on: [],
-        status: "done",
-      }),
+      setup: node(
+        {
+          title: "Setup",
+          parent: "desktop",
+          depends_on: [],
+          kind: "blackbox",
+          status: "done",
+        },
+        blackbox(),
+      ),
     });
-    expect(ids(root)).toEqual([["chat", "web"]]);
+    expect(ids(root)).toEqual([["chat", "explore-desktop", "web"]]);
   });
 
   test("stops at a dependency cycle", () => {
+    const leaf = (title: string, dependency: string) =>
+      node({
+        title,
+        parent: "root",
+        depends_on: [dependency],
+        kind: "collaborative",
+        status: "todo",
+      });
     const root = project({
       root: sample.root,
-      a: node({ title: "A", parent: "root", depends_on: ["b"], status: "fog" }),
-      b: node({ title: "B", parent: "root", depends_on: ["a"], status: "fog" }),
+      a: leaf("A", "b"),
+      b: leaf("B", "a"),
     });
     expect(ids(root).flat().sort()).toEqual(["a", "b"]);
   });
@@ -230,24 +285,37 @@ describe("renderHtml", () => {
             title: "Setup <fast>",
             parent: "desktop",
             depends_on: [],
-            status: "ready",
+            kind: "blackbox",
+            status: "todo",
           },
-          "\n## Completion criteria\n- [x] Runs `bun`\n- [ ] See [the guide](../../knowledge/guide.md)\n",
+          blackbox(
+            "- [x] Runs `bun`\n- [ ] See [the guide](../../knowledge/guide.md)\n",
+          ),
         ),
       }),
     );
 
   test("shows progress, the work possible now, the order, and every node", () => {
     const html = renderHtml(plan(), [
-      { commit: "abc1234", date: "2026-09-28", subject: "Explore the root" },
+      { commit: "abc1234", date: "2026-09-28", subject: "Plan the root" },
     ]);
-    expect(html).toContain("0 of 3 leaf nodes done · 1 fog, 2 ready");
+    expect(html).toContain(
+      "0 of 3 leaves done · 3 todo · 1 goal needs planning · 2 open tickets · 1 of 2 criteria met",
+    );
     expect(html).toContain("1 of 2 criteria met");
-    expect(html).toContain('<body data-start="setup">');
+    expect(html).toContain('<body data-start="web">');
     expect(html).toContain("Step 2");
-    for (const id of ["root", "apps", "desktop", "chat", "setup", "web"])
+    for (const id of [
+      "root",
+      "apps",
+      "desktop",
+      "chat",
+      "explore-desktop",
+      "setup",
+      "web",
+    ])
       expect(html).toContain(`data-detail="${id}"`);
-    expect(html).toContain("<code>abc1234</code> 2026-09-28 Explore the root");
+    expect(html).toContain("<code>abc1234</code> 2026-09-28 Plan the root");
   });
 
   test("escapes text and renders checkboxes, code, and link text", () => {
@@ -261,24 +329,16 @@ describe("renderHtml", () => {
   test("marks blocked work and gives the order its arrows", () => {
     const html = renderHtml(
       loadPlan(
-        project({
-          ...sample,
-          launch: node({
-            title: "Launch",
-            parent: "root",
-            depends_on: ["apps"],
-            status: "fog",
-          }),
-        }),
+        project({ ...sample, launch: goal("Launch", "root", ["apps"]) }),
       ),
     );
-    expect(html).toContain('class="card ready blocked" data-node="chat"');
+    expect(html).toContain('class="card todo blocked" data-node="chat"');
     expect(html).toContain('title="Waits for Setup">waits for 1</span>');
     expect(html).toContain(
       'data-node="chat" data-deps="setup" data-waits="setup"',
     );
     expect(html).toContain(
-      'data-node="launch" data-deps="apps" data-waits="chat setup"',
+      'data-node="launch" data-deps="apps" data-waits="chat explore-desktop setup"',
     );
     expect(html).toContain('data-node="setup" data-deps="" data-waits=""');
   });
@@ -290,6 +350,9 @@ describe("renderHtml", () => {
       "";
     expect(detail("setup")).toContain('<dt>Parent</dt><dd><a href="#desktop"');
     expect(detail("setup")).toContain('<dt>Needed by</dt><dd><a href="#chat"');
+    expect(detail("setup")).toContain(
+      '<span class="status todo">blackbox, todo</span>',
+    );
     expect(detail("chat")).toContain('<dt>Depends on</dt><dd><a href="#setup"');
     expect(detail("desktop")).toContain(
       '<dt>Children</dt><dd><a href="#chat" data-go="chat"',
@@ -300,25 +363,30 @@ describe("renderHtml", () => {
   test("splits the progress bar by status and shows a legend", () => {
     const html = renderHtml(plan());
     expect(html).toContain(
-      '<div class="bar"><span class="ready" style="width: 66.66666666666666%" title="2 ready"></span><span class="fog" style="width: 33.33333333333333%" title="1 fog"></span></div>',
+      '<div class="bar"><span class="todo" style="width: 100%" title="3 todo"></span></div>',
     );
-    for (const status of ["fog", "decomposed", "done", "cancelled"])
+    for (const status of ["open", "todo", "done", "cancelled"])
       expect(html).toContain(`<li class="${status} muted">`);
   });
 });
 
-test("counts open questions only inside their section", () => {
-  const body = "## Open questions\n- a\n- b\n\n## Out of scope\n- c\n";
-  expect(countOpenQuestions(body)).toBe(2);
+test("counts open tickets only inside their section", () => {
+  const body = "## Tickets\n- a\n- b\n\n## Out of scope\n- c\n";
+  expect(countOpenTickets(body)).toBe(2);
 });
 
 describe("loadPlan problems", () => {
+  const leaf = (
+    title: string,
+    parent: string,
+    kind: string,
+    status: string,
+    body = "",
+  ) => node({ title, parent, depends_on: [], kind, status }, body);
   const cases: [string, Record<string, string>, string][] = [
     [
       "missing root",
-      {
-        a: node({ title: "A", parent: "root", depends_on: [], status: "fog" }),
-      },
+      { a: leaf("A", "root", "explore", "todo") },
       "root: plan/nodes/root.md is missing or invalid",
     ],
     [
@@ -330,67 +398,14 @@ describe("loadPlan problems", () => {
           title: "R",
           parent: null,
           depends_on: [],
-          status: "planned",
+          kind: "goal",
+          status: "open",
         }),
       },
       'root: unknown frontmatter field "id"',
     ],
     [
-      "invalid status",
-      {
-        root: node({
-          title: "R",
-          parent: null,
-          depends_on: [],
-          status: "planned",
-        }),
-      },
-      "root: status must be one of",
-    ],
-    [
-      "missing parent",
-      {
-        root: sample.root,
-        a: node({ title: "A", parent: "nope", depends_on: [], status: "fog" }),
-      },
-      'a: parent "nope" does not exist',
-    ],
-    [
-      "missing dependency",
-      {
-        root: node({
-          title: "R",
-          parent: null,
-          depends_on: ["nope"],
-          status: "fog",
-        }),
-      },
-      'root: depends_on "nope" does not exist',
-    ],
-    [
-      "parent cycle",
-      {
-        root: node({ title: "R", parent: null, depends_on: [], status: "fog" }),
-        a: node({ title: "A", parent: "b", depends_on: [], status: "fog" }),
-        b: node({ title: "B", parent: "a", depends_on: [], status: "fog" }),
-      },
-      "a: its parent chain has a cycle",
-    ],
-    [
-      "ready parent with open children",
-      {
-        root: node({
-          title: "R",
-          parent: null,
-          depends_on: [],
-          status: "ready",
-        }),
-        a: node({ title: "A", parent: "root", depends_on: [], status: "fog" }),
-      },
-      "root: ready needs every child to be done or cancelled",
-    ],
-    [
-      "decomposed leaf",
+      "a v1 node without a kind",
       {
         root: node({
           title: "R",
@@ -399,37 +414,103 @@ describe("loadPlan problems", () => {
           status: "decomposed",
         }),
       },
-      "root: decomposed needs child nodes",
+      "root: kind must be one of goal, explore, collaborative, blackbox",
     ],
     [
-      "done parent with open children",
+      "a status the kind does not allow",
       {
         root: node({
           title: "R",
           parent: null,
           depends_on: [],
+          kind: "goal",
+          status: "todo",
+        }),
+      },
+      "root: status must be one of open, done, cancelled for kind goal",
+    ],
+    [
+      "a root that is not a goal",
+      {
+        root: node({
+          title: "R",
+          parent: null,
+          depends_on: [],
+          kind: "explore",
+          status: "todo",
+        }),
+      },
+      "root: kind must be goal",
+    ],
+    [
+      "missing parent",
+      { root: sample.root, a: leaf("A", "nope", "explore", "todo") },
+      'a: parent "nope" does not exist',
+    ],
+    [
+      "a leaf with children",
+      {
+        root: sample.root,
+        a: leaf("A", "root", "explore", "todo"),
+        b: leaf("B", "a", "explore", "todo"),
+      },
+      'b: parent "a" is a leaf (explore); only goals have children',
+    ],
+    [
+      "missing dependency",
+      { root: goal("R", null, ["nope"]) },
+      'root: depends_on "nope" does not exist',
+    ],
+    [
+      "parent cycle",
+      { root: sample.root, a: goal("A", "b"), b: goal("B", "a") },
+      "a: its parent chain has a cycle",
+    ],
+    [
+      "done goal with open children",
+      {
+        root: node({
+          title: "R",
+          parent: null,
+          depends_on: [],
+          kind: "goal",
           status: "done",
         }),
-        a: node({
-          title: "A",
-          parent: "root",
-          depends_on: [],
-          status: "exploring",
-        }),
+        a: leaf("A", "root", "explore", "todo"),
       },
       "root: done needs every child to be done or cancelled",
     ],
     [
-      "file name",
+      "a blackbox node without its required sections",
+      { root: sample.root, a: leaf("A", "root", "blackbox", "todo") },
+      'a: kind blackbox needs a "## Output" section',
+    ],
+    [
+      "a done explore leaf with tickets left",
       {
         root: sample.root,
-        Bad_Name: node({
-          title: "B",
-          parent: "root",
-          depends_on: [],
-          status: "fog",
-        }),
+        a: leaf(
+          "A",
+          "root",
+          "explore",
+          "done",
+          "\n## Tickets\n- [grilling] Q?\n",
+        ),
       },
+      "a: a done explore leaf has no Tickets left",
+    ],
+    [
+      "two collaborative leaves in progress",
+      {
+        root: sample.root,
+        a: leaf("A", "root", "collaborative", "in_progress"),
+        b: leaf("B", "root", "collaborative", "in_progress"),
+      },
+      "a, b: at most one collaborative leaf may be in_progress",
+    ],
+    [
+      "file name",
+      { root: sample.root, Bad_Name: leaf("B", "root", "explore", "todo") },
       "Bad_Name: file name must be kebab-case",
     ],
   ];
@@ -472,7 +553,8 @@ describe("command line", () => {
         title: "Web",
         parent: "root",
         depends_on: [],
-        status: "exploring",
+        kind: "goal",
+        status: "cancelled",
       }),
     );
     expect(run(root, "--check")).toMatchObject({ code: 1 });

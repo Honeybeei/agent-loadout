@@ -47,8 +47,13 @@ function repository(files: Record<string, string> = {}): string {
   return root;
 }
 
-const node = (id: string, parent: string | null, status: string) =>
-  `---\ntitle: ${id}\nparent: ${parent}\ndepends_on: []\nstatus: ${status}\n---\n\n# ${id}\n\n## Goal\nA goal.\n`;
+const node = (
+  id: string,
+  parent: string | null,
+  kind: string,
+  status: string,
+) =>
+  `---\ntitle: ${id}\nparent: ${parent}\ndepends_on: []\nkind: ${kind}\nstatus: ${status}\n---\n\n# ${id}\n\n## Goal\nA goal.\n`;
 
 const doc = (title: string, fields = "") =>
   `---\ncanonical_for:\n  - ${title}\n${fields}---\n\n# ${title}\n`;
@@ -61,7 +66,7 @@ function project(): string {
       "# Project\n\nRead [AGENTS](AGENTS.md), [Knowledge](knowledge/README.md), and [Plan](plan/README.md).\n",
     "knowledge/README.md": "# Knowledge\n",
     "plan/README.md": "# Plan\n\nRead the [map](map.md).\n",
-    "plan/nodes/root.md": node("root", null, "fog"),
+    "plan/nodes/root.md": node("root", null, "goal", "open"),
   });
   for (const change of planSync(root).changes) change.apply(root);
   write(root, { "plan/map.md": renderMap(loadPlan(root)) });
@@ -170,13 +175,13 @@ describe("findings", () => {
     ],
     [
       "an invalid Plan node",
-      { "plan/nodes/next.md": node("next", "root", "todo") },
+      { "plan/nodes/next.md": node("next", "root", "goal", "todo") },
       "plan",
       "next: status must be one of",
     ],
     [
       "a stale map",
-      { "plan/nodes/next.md": node("next", "root", "fog") },
+      { "plan/nodes/next.md": node("next", "root", "explore", "todo") },
       "plan",
       "plan/map.md is stale",
     ],
