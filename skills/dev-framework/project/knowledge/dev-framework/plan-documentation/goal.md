@@ -33,7 +33,7 @@ A goal is a todo split into child nodes. It is never run directly: planning spli
 
 ## Planning
 
-Planning decides the work. It runs when a goal needs planning, and when an explore or collaborative leaf finishes, for the goals its results affect. It never makes technical decisions; those belong to explore leaves.
+Planning decides the work. It runs when a goal needs planning, and when an explore or collaborative leaf finishes or a blackbox leaf merges with work left, for the goals its results affect. It never makes technical decisions; those belong to explore leaves.
 
 - Give each part that lacks decisions an explore leaf. Its destination is what must be decided before that part can be planned.
 - Split top-down and recursively, into sub-goals and leaves, until every leaf meets its kind's size rule. Prefer vertical slices that end in something runnable over layers.
