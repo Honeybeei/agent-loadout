@@ -39,9 +39,9 @@ Sessions pass records to each other through files in their own `.tmp/`:
 | File | Written by | Read by |
 | --- | --- | --- |
 | `.tmp/reports/<node>.md` in the worktree | The implementation session | `dev-next` and `dev-blackbox-review` |
-| `.tmp/reviews/<node>.md` in the main checkout | `dev-blackbox-review` | The implementation session |
+| `.tmp/reviews/<node>.md` in the main checkout | `dev-blackbox-review` | The implementation session, `dev-next`, and `dev-blackbox-review` |
 
-The lead session finds a node's worktree at `../<repository directory>.worktrees/<node>`, as [Git workflow](git-workflow.md#worktrees) says. The implementation session finds the main checkout as the first entry of `git worktree list`.
+The newer of the two says whose turn it is: a report with no newer review file waits for review, and a review file newer than the report is being fixed. The lead session finds a node's worktree at `../<repository directory>.worktrees/<node>`, as [Git workflow](git-workflow.md#worktrees) says. The implementation session finds the main checkout as the first entry of `git worktree list`.
 
 ## Dispatch
 
@@ -92,9 +92,9 @@ Before a `completed` report, the session merges `main` into `impl/<node>`, verif
 
 | Case | Outcome |
 | --- | --- |
-| `completed`; `main` has no changes outside `plan/` and `knowledge/` since Based on; nothing to fix | Merge as [Git workflow](git-workflow.md#integration) says, with the node's updates, then clean up |
+| `completed`; `main` has no changes outside `plan/` and `knowledge/` since Based on; nothing holds back the merge | Merge as [Git workflow](git-workflow.md#integration) says, with the node's updates, then clean up |
 | `completed`, but `main` has other changes since Based on | Ask for a refresh: merge `main` and verify again |
-| `completed`, with findings in the output or the code | Write them to the review file; the implementation session addresses them and reports again |
+| `completed`, with a break of the node or a spec gap | Write them to the review file; the implementation session fixes them and reports again |
 | `blocked`, or recalled by the lead session | Reopen: discard the worktree and the branch, set the leaf back to `todo`, and add an explore leaf holding the blocker's questions to its `depends_on` |
 
 - Review verifies the merged result itself; the report's evidence counts only for manual verification.

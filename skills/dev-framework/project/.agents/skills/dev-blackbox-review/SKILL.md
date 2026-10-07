@@ -25,7 +25,7 @@ Read the reference for the case, and only that one:
 | An `in_progress` blackbox leaf whose report says `completed` | [Merge](references/merge.md) |
 | An `in_progress` blackbox leaf whose report says `blocked`, or any `in_progress` blackbox leaf with the argument `recall` | [Reopen](references/reopen.md) |
 
-A leaf without a report is still being implemented: say so and stop. For any other leaf, say why there is nothing to review, and follow [dev-next](../dev-next/SKILL.md).
+Unless the argument is `recall`, a leaf that does not wait for review, as [Writing across sessions](../../../knowledge/dev-framework/workflow.md#writing-across-sessions) says, is still being implemented: say so and stop. For any other leaf, say why there is nothing to review, and follow [dev-next](../dev-next/SKILL.md).
 
 ## 3. Finish
 

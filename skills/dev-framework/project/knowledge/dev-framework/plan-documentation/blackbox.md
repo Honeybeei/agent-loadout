@@ -41,6 +41,7 @@ For other work: observable behavior, results, examples. Images and references ar
 - Implemented: <what was built, linking the Knowledge it implements>, <evidence such as checks and the merge>
 - Reopened: <why the implementation stopped>, <the explore leaf that holds its questions>
 - Spec gap: <what the review found missing from the node>
+- Left: <a finding the user dropped or planned as later work, with the node it went to>
 ```
 
 Goal, Output, Completion criteria, Verification, and Record are required; the map script checks them. Add the other sections when they apply.
@@ -51,7 +52,7 @@ The agent runs this check when planning writes the leaf, and again at dispatch. 
 
 1. **Build walk.** Walk through building the leaf and find the decisions that would stop the session, as [Blockers](#blockers) defines. Each must already be decided in Knowledge, or go to an explore leaf in `depends_on`. Internal decisions are not listed.
 2. **Output walk.** Imagine checking the finished result and list what the user will look at, such as each screen, each state, and what an error looks like. Each is described in Output or the criteria.
-3. Every Completion criterion is checkable from the output and holds on every supported platform.
+3. Every Completion criterion is checkable from the output and holds on every supported platform. A criterion about every input of some kind names the cases that check it.
 4. Relies on holds every fact the work needs. Nothing lives only in `.tmp/`, external documents, or the conversation.
 5. **Size.** One session can finish it, the user can check its output in one sitting, and it is one coherent output, such as one screen, one flow, or one feature.
 6. The user approves the Output and the criteria.
@@ -73,11 +74,8 @@ The implementation session decides what the lead session would not have to recor
 
 ## Judging the result
 
-Review has two parts:
+The user judges the output: whether it meets the criteria, and whether the result is satisfying. The agent judges the code, which the user does not read.
 
-| Who | Judges |
-| --- | --- |
-| The user | The output: whether it meets the criteria, and whether the result is satisfying |
-| The lead session agent | The code: the automated checks pass, the scope holds, nothing outside it changed, the Interface matches, and the project's rules are followed |
-
-The user does not read the code, so the agent keeps broken code from merging. Anything the user dislikes in the output is a spec gap: add it to the node, ask for the fix, and add a Spec gap line to Record so later blackbox leaves are written better.
+- A break of the node holds back the merge: a criterion, the Output, or the Interface unmet, a failing check, a change outside the scope, or a broken rule from Relies on or the project's rules. So does a spec gap, what the user dislikes in the output, which goes into the node with a Spec gap line in Record so later blackbox leaves are written better. The user may plan either as later work instead.
+- Every other finding goes to the user once, with a recommendation; the user drops it, makes it a spec gap, or plans it as later work.
+- A finding names the problem, never a design for the fix. When the fix needs a decision the session would stop at, as [Blockers](#blockers) says, the user makes it in the review and the finding states it, so the session is not blocked.

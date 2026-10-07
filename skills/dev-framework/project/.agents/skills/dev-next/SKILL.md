@@ -13,7 +13,7 @@ Keep it light: read the map, the reports, and the nodes you recommend. Run no re
 
 - Regenerate the map, which also refreshes the browser view, then read `plan/map.md`. While a collaborative leaf is open, the main checkout is on its `impl/<node>`, so the map there shows that branch's Plan.
 - The lead session's open leaf: an `in_progress` explore leaf, or the `in_progress` collaborative leaf. The lead session runs one at a time.
-- For each `in_progress` blackbox leaf, look for its report at `../<repository directory>.worktrees/<node>/.tmp/reports/<node>.md`. A report means the implementation waits for review; no report means it is still running.
+- For each `in_progress` blackbox leaf, look for its report at `../<repository directory>.worktrees/<node>/.tmp/reports/<node>.md` and its review file in this checkout; whether it waits for review follows [Writing across sessions](../../../knowledge/dev-framework/workflow.md#writing-across-sessions).
 - Find what just happened: the result of the skill that called this one, or, when invoked alone, the last few commits and the newest Record lines.
 
 ## 2. Choose up to three recommendations
@@ -22,7 +22,7 @@ Take them in this order:
 
 | Order | Situation | Recommend |
 | --- | --- | --- |
-| 1 | A blackbox leaf with a report | Review it |
+| 1 | A blackbox leaf waiting for review | Review it |
 | 2 | The lead session's open leaf | Continue it |
 | 3 | A closable goal | Close it |
 | 4 | An unblocked `todo` blackbox leaf | Dispatch it, starting with one that blocks other nodes |
@@ -31,7 +31,7 @@ Take them in this order:
 
 - Finished implementations come first: reviewing them frees their worktrees and unblocks the nodes that wait for them.
 - Work that builds comes before more planning. Plans that grow ahead of working results are the failure this order prevents.
-- Leave running implementations alone: a blackbox leaf without a report belongs to its implementation session.
+- Leave running implementations alone: a blackbox leaf that does not wait for review belongs to its implementation session.
 - While a collaborative leaf is open, work on `main`, such as a review or a dispatch, waits for a slice boundary, as [Git workflow](../../../knowledge/dev-framework/git-workflow.md#implementation-branches) says.
 - Within the same order, prefer nodes under the same goal as the work just done, then map order.
 

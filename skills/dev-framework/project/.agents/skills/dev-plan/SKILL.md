@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Dev Plan
 
-Decide the work under one goal, or finish a goal whose work is done. Planning decides the work and makes no technical decisions; a part that lacks them gets an explore leaf. When an explore or collaborative leaf finishes, its skill follows step 2 of this procedure for the goals its results affect.
+Decide the work under one goal, or finish a goal whose work is done. Planning decides the work and makes no technical decisions; a part that lacks them gets an explore leaf. When an explore or collaborative leaf finishes, or a blackbox leaf merges with work left, its skill follows step 2 of this procedure for the goals its results affect.
 
 The project's rules are indexed in [Dev Framework rules](../../../knowledge/dev-framework.md). Commits follow [Git workflow](../../../knowledge/dev-framework/git-workflow.md#commits).
 
