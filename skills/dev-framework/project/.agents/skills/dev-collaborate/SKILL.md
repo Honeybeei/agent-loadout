@@ -40,7 +40,7 @@ When the user says the work is done:
 1. **Verify.** Run the checks the node names and the checks `AGENTS.md` names, and show the results.
 2. **Show the changes.** List every line of the node with where it goes, as Plan documentation's [Recording decisions](../../../knowledge/dev-framework/plan-documentation.md#recording-decisions) says; the planning it calls for; and the node updates. Ask once for the merge, including deleting the branch.
 3. **Merge.** Commit any finished work, run `git switch main`, then `git merge --no-ff --no-commit impl/<node>`, and resolve conflicts.
-4. **Apply.** Move each line as listed, leaving its gist and a link to its owner. Follow [dev-plan](../dev-plan/SKILL.md) step 2 for the goals the results affect. Set the leaf `done`, add `Implemented: <what was built>, <evidence>` to Record, and regenerate the map.
+4. **Apply.** Move each line as listed, leaving its gist and a link to its owner. Follow [dev-plan](../dev-plan/SKILL.md) step 2 for the goals the results affect. Set the leaf `done`, add `Implemented: <what was built, linking the Knowledge it implements>, <evidence>` to Record, and regenerate the map.
 5. **Check and commit.** Run the automated checks `AGENTS.md` names. When one fails, run `git merge --abort`, switch back to `impl/<node>`, and fix it there. Otherwise, commit the merge as `plan(<node>): implement <title>`. When it changes a Knowledge document that an `in_progress` blackbox leaf relies on, name those leaves in the same prompt and recommend no effect, notify, or recall for each, as Development workflow's [Changing Knowledge while blackbox leaves run](../../../knowledge/dev-framework/workflow.md#changing-knowledge-while-blackbox-leaves-run) says.
 6. **Clean up.** Run `git branch -d impl/<node>`.
 

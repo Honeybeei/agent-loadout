@@ -24,7 +24,7 @@ Classify content by the question it answers:
 
 For example, "exports must preserve all user data" is Knowledge; "implement export, then test recovery" is Plan, even when approved.
 
-- Label approved but unimplemented decisions as such.
+- State what must hold, not what is built; whether a design is built is read from the Plan and the code.
 - Keep proposals under consideration out of Knowledge until they are approved.
 - Give each topic one detailed owner. Other documents may summarize it briefly and link to it.
 - Put project-wide and cross-workspace Knowledge in root `knowledge/`, and workspace-specific Knowledge in that workspace's `knowledge/`.

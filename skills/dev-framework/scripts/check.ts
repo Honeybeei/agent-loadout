@@ -57,6 +57,9 @@ const REQUIRED = [
 const RESERVED = ["knowledge", "plan", ".tmp", ".git", ".agents", ".claude"];
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MANAGED_DOCUMENT = /^knowledge\/dev-framework(?:\.md$|\/)/;
+// Progress wording that Knowledge must not hold.
+const BUILD_STATUS =
+  /\bnot yet (?:implemented|built)\b|\bnot (?:implemented|built) yet\b/i;
 // Skills that earlier Framework versions put into projects.
 const OLD_SKILL =
   /^(?:dev-check(?:-[a-z-]+)?|dev-conformance|dev-cycle|dev-framework-report|dev-init|dev-ssot|dev-update|development-cycle|inspect-project)$/;
@@ -468,6 +471,17 @@ export function diagnose(projectRoot: string): {
         "ssot",
         `"${topic}" is in canonical_for of ${owners.join(" and ")}; give it one owner`,
       );
+  for (const path of knowledge) {
+    if (MANAGED_DOCUMENT.test(path)) continue;
+    const status = BUILD_STATUS.exec(
+      withoutCode(readFileSync(join(root, path), "utf8")),
+    )?.[0];
+    if (status)
+      add(
+        "ssot",
+        `${path}: says "${status}"; Knowledge states what must hold, and the Plan and the code say what is built`,
+      );
+  }
 
   // Links
   const inKnowledgeOrPlan = (path: string) =>

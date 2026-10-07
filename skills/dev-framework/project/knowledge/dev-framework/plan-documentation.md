@@ -106,7 +106,7 @@ A decision, or a fact found along the way, is recorded with its owner:
 
 | The decision is | Its owner |
 | --- | --- |
-| A product or technical rule or design that stays valid | Knowledge, labeled if not yet implemented |
+| A product or technical rule or design that stays valid | Knowledge |
 | A decision about one piece of work, such as scope, order, or approach | That node |
 | A fact found by investigation | Knowledge if later work will rely on it, otherwise a summary in the node; never the raw material |
 | A term the user agrees on | The glossary |

@@ -245,6 +245,14 @@ describe("findings", () => {
       '"Deployment" is in canonical_for of knowledge/deploy.md and knowledge/ops.md',
     ],
     [
+      "build status in Knowledge",
+      {
+        "knowledge/chat.md": `${doc("Chat")}\nChat streams answers. Not yet implemented.\n`,
+      },
+      "ssot",
+      'knowledge/chat.md: says "Not yet implemented"; Knowledge states what must hold',
+    ],
+    [
       "a topic that a Framework document owns",
       { "knowledge/style.md": doc("Documentation style") },
       "ssot",

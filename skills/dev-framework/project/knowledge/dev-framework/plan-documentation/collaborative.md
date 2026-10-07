@@ -18,7 +18,7 @@ A collaborative leaf is implementation the user shapes together with the agent i
 <Free-form body: criteria, sketches, notes, questions, decisions — whatever helps the work>
 
 ## Record
-- Implemented: <what was built>, <evidence such as checks and the merge>
+- Implemented: <what was built, linking the Knowledge it implements>, <evidence such as checks and the merge>
 ```
 
 One rule binds the body: decisions and new topics that must reach Knowledge or the Plan are written in the node as they come, in any form. Finishing collects them from the node. The lead session works on the leaf's branch in the main checkout, as [Git workflow](../git-workflow.md#implementation-branches) says.
