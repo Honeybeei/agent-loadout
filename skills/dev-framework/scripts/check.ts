@@ -43,8 +43,12 @@ export interface Finding {
   area: Area;
   message: string;
 }
-// Independent pieces of work for each group's judgment checks.
-export type Units = Partial<Record<Group, string[]>>;
+// Independent pieces of work for each group's judgment checks, with the files each one judges.
+export interface Unit {
+  name: string;
+  files: string[];
+}
+export type Units = Partial<Record<Group, Unit[]>>;
 type Add = (area: Area, message: string) => void;
 
 const REQUIRED = [
@@ -561,18 +565,58 @@ export function diagnose(projectRoot: string): {
       if (OLD_SKILL.test(name))
         add("leftovers", `.agents/skills/${name} is from an earlier Framework`);
 
+  const file = (path: string): Unit => ({ name: path, files: [path] });
+  // The project rules in the root AGENTS.md, outside the managed section.
+  const agents = exists("AGENTS.md") ? [file("AGENTS.md")] : [];
   const units: Units = {
-    plan: documents.filter((path) => /^plan\/nodes\/[^/]+\.md$/.test(path)),
-    ssot: topics
-      .filter(({ owners }) => owners.some((o) => !MANAGED_DOCUMENT.test(o)))
-      .map(({ topic, owners }) => `${topic}: ${owners.join(", ")}`),
-    links: documents,
-    writing: documents,
+    structure: agents,
+    plan: documents
+      .filter((path) => /^plan\/nodes\/[^/]+\.md$/.test(path))
+      .map(file),
+    ssot: [
+      ...topics
+        .filter(({ owners }) => owners.some((o) => !MANAGED_DOCUMENT.test(o)))
+        .map(({ topic, owners }) => ({
+          name: `${topic}: ${owners.join(", ")}`,
+          files: owners,
+        })),
+      ...agents,
+    ],
+    links: documents.map(file),
+    writing: documents.map(file),
   };
   return { state, findings, units };
 }
 
-const USAGE = "Usage: bun check.ts [project-root] [--group <id>[,<id>...]|all]";
+/**
+ * The files that differ from a commit, uncommitted and untracked ones included,
+ * or undefined when the Framework rules changed since, so that every unit needs judging again.
+ */
+export function changedSince(
+  projectRoot: string,
+  commit: string,
+): Set<string> | undefined {
+  const root = realpathSync(projectRoot);
+  const rules = git(root, [
+    "diff",
+    "--name-only",
+    commit,
+    "--",
+    "knowledge/dev-framework.md",
+    "knowledge/dev-framework",
+  ]).stdout;
+  if (rules.trim() !== "") return undefined;
+  const files = [
+    ...git(root, ["diff", "--name-only", "-z", commit]).stdout.split("\0"),
+    ...git(root, ["ls-files", "-o", "--exclude-standard", "-z"]).stdout.split(
+      "\0",
+    ),
+  ];
+  return new Set(files.filter((path) => path !== ""));
+}
+
+const USAGE =
+  "Usage: bun check.ts [project-root] [--group <id>[,<id>...]|all [--changed-since <commit>]]";
 
 function print(title: string, lines: string[]): void {
   console.log(`\n${title}\n${lines.map((line) => `- ${line}`).join("\n")}`);
@@ -580,22 +624,33 @@ function print(title: string, lines: string[]): void {
 
 if (import.meta.main) {
   const args = process.argv.slice(2);
-  const option = args.indexOf("--group");
-  const groupArgument = option === -1 ? undefined : (args[option + 1] ?? "");
-  const positional = args.filter(
-    (_, i) => option === -1 || (i !== option && i !== option + 1),
-  );
+  const options = new Map<string, string>();
+  const positional: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] ?? "";
+    if (arg === "--group" || arg === "--changed-since")
+      options.set(arg, args[++i] ?? "");
+    else positional.push(arg);
+  }
+  const groupArgument = options.get("--group");
+  const since = options.get("--changed-since");
   const selected =
     groupArgument === "all" ? [...GROUPS] : groupArgument?.split(",");
+  const root = resolve(positional[0] ?? ".");
   if (
     positional.length > 1 ||
     positional.some((arg) => arg.startsWith("--")) ||
-    selected?.some((id) => !(GROUPS as readonly string[]).includes(id))
+    selected?.some((id) => !(GROUPS as readonly string[]).includes(id)) ||
+    (since !== undefined &&
+      (selected === undefined ||
+        git(root, ["rev-parse", "--verify", "--quiet", `${since}^{commit}`])
+          .status !== 0))
   ) {
     console.error(`${USAGE}\nGroups: ${GROUPS.join(", ")}`);
     process.exit(2);
   }
-  const { state, findings, units } = diagnose(resolve(positional[0] ?? "."));
+  const changed = since === undefined ? undefined : changedSince(root, since);
+  const { state, findings, units } = diagnose(root);
   const messages = (area: Area) =>
     findings.filter((f) => f.area === area).map((f) => f.message);
   console.log(`State: ${state}`);
@@ -621,8 +676,18 @@ if (import.meta.main) {
     for (const message of found) console.log(`- ${message}`);
     const list = units[group];
     if (list === undefined) continue;
-    console.log(`Judgment units: ${list.length}`);
-    for (const unit of list) console.log(`- ${unit}`);
+    const shown =
+      changed === undefined
+        ? list
+        : list.filter((unit) => unit.files.some((path) => changed.has(path)));
+    const scope =
+      since === undefined
+        ? ""
+        : changed === undefined
+          ? `, all because the Framework rules changed since ${since}`
+          : ` of ${list.length}, changed since ${since}`;
+    console.log(`Judgment units: ${shown.length}${scope}`);
+    for (const unit of shown) console.log(`- ${unit.name}`);
   }
   process.exit(
     findings.some((f) => (selected as string[]).includes(f.area)) ? 1 : 0,

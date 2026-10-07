@@ -1,6 +1,6 @@
 # Links and Navigation
 
-Links resolve, every maintained document can be reached from the root README, and nothing relies on `.tmp/`. Read [Navigation](../../../dev-framework/project/knowledge/dev-framework/readme-agents-guideline.md#navigation) and [Temporary material](../../../dev-framework/project/knowledge/dev-framework/project-structure.md#temporary-material) before judging or proposing a fix.
+Links resolve, every maintained document can be reached from the root README, and nothing relies on `.tmp/`.
 
 ## Script findings
 
@@ -12,11 +12,9 @@ The script checks reachability only for Knowledge, the Plan entry points, worksp
 | A `.tmp/` path that Knowledge or Plan names | Move the needed conclusions into the document, then remove the path |
 | A document the root README does not reach | Link it from the index of its area: a README, `knowledge/README.md`, or its parent's `subdocs` |
 
-## Judgment checks
+## Judgment
 
-Unit: one document.
+Unit: one document, judged against [Navigation](../../../dev-framework/project/knowledge/dev-framework/readme-agents-guideline.md#navigation), [Links and reading](../../../dev-framework/project/knowledge/dev-framework/knowledge-documentation.md#links-and-reading), and [Temporary material](../../../dev-framework/project/knowledge/dev-framework/project-structure.md#temporary-material).
 
-| Check | Rule |
-| --- | --- |
-| Each link to another document says when or why to read it; a link under a heading that already says so, such as Relies on in a Plan node, passes | [Navigation](../../../dev-framework/project/knowledge/dev-framework/readme-agents-guideline.md#navigation) |
-| A maintained document outside the script's scope, such as `docs/guide.md`, is reachable from the root README; search for links to it | [Navigation](../../../dev-framework/project/knowledge/dev-framework/readme-agents-guideline.md#navigation) |
+- A link under a heading that already says when or why to read it, such as Relies on in a Plan node, passes.
+- For a maintained document outside the script's scope, such as `docs/guide.md`, search for links to it.

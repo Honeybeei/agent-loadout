@@ -427,15 +427,18 @@ describe("hard wraps", () => {
   });
 });
 
-test("judgment units list nodes, topics, and maintained documents", () => {
+test("judgment units list nodes, topics, maintained documents, and AGENTS.md", () => {
   const root = project();
   write(root, { "knowledge/topic.md": doc("Topic") });
   const { units } = diagnose(root);
-  expect(units.plan).toEqual(["plan/nodes/root.md"]);
-  expect(units.ssot).toEqual(["Topic: knowledge/topic.md"]);
-  expect(units.writing).toContain("knowledge/topic.md");
-  expect(units.writing).not.toContain("plan/map.md");
-  expect(units.writing).not.toContain("knowledge/dev-framework.md");
+  const names = (group: keyof typeof units) =>
+    units[group]?.map((unit) => unit.name);
+  expect(names("structure")).toEqual(["AGENTS.md"]);
+  expect(names("plan")).toEqual(["plan/nodes/root.md"]);
+  expect(names("ssot")).toEqual(["Topic: knowledge/topic.md", "AGENTS.md"]);
+  expect(names("writing")).toContain("knowledge/topic.md");
+  expect(names("writing")).not.toContain("plan/map.md");
+  expect(names("writing")).not.toContain("knowledge/dev-framework.md");
 });
 
 describe("CLI", () => {
@@ -478,5 +481,53 @@ describe("CLI", () => {
 
   test("rejects an unknown group", () => {
     expect(run(project(), "--group", "style").exitCode).toBe(2);
+  });
+
+  test("--changed-since lists only the units changed since the commit, uncommitted and untracked ones included", () => {
+    const root = project();
+    write(root, {
+      "knowledge/README.md": "# Knowledge\n\nRead [the topic](topic.md).\n",
+      "knowledge/topic.md": doc("Topic"),
+    });
+    git(root, "add", "-A");
+    git(root, "commit", "-q", "-m", "Add a topic");
+    write(root, {
+      "knowledge/topic.md": `${doc("Topic")}\nChanged.\n`,
+      "docs/new.md": "# New\n",
+    });
+    const out = run(
+      root,
+      "--group",
+      "ssot,writing",
+      "--changed-since",
+      "HEAD",
+    ).stdout.toString();
+    expect(out).toContain(
+      "Judgment units: 1 of 2, changed since HEAD\n- Topic: knowledge/topic.md\n",
+    );
+    expect(out).toContain(
+      "Judgment units: 2 of 7, changed since HEAD\n- docs/new.md\n- knowledge/topic.md\n",
+    );
+  });
+
+  test("--changed-since lists every unit when the Framework rules changed", () => {
+    const root = project();
+    write(root, {
+      "knowledge/dev-framework/writing-rules.md":
+        "---\nmanaged_by: dev-framework\n---\n\n# Edited\n",
+    });
+    expect(
+      run(root, "--group", "plan", "--changed-since", "HEAD").stdout.toString(),
+    ).toContain(
+      "Judgment units: 1, all because the Framework rules changed since HEAD\n",
+    );
+  });
+
+  test("--changed-since needs --group and a known commit", () => {
+    const root = project();
+    expect(run(root, "--changed-since", "HEAD").exitCode).toBe(2);
+    expect(
+      run(root, "--group", "plan", "--changed-since", "nope").exitCode,
+    ).toBe(2);
   });
 });
