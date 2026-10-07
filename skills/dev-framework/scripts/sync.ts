@@ -34,6 +34,8 @@ type Action = "create" | "replace" | "remove";
 interface Change {
   path: string;
   action: Action;
+  /** Why the change needs a look before it is applied. */
+  note?: string;
   apply: (root: string) => void;
 }
 
@@ -149,6 +151,11 @@ export function planSync(projectRoot: string): {
   if (frameworkTree instanceof Map)
     frameworkTree.set("managed.txt", Buffer.from(`${managed.join("\n")}\n`));
 
+  // The paths an earlier sync wrote; any other directory in the way is the project's own.
+  const manifest = join(root, MANIFEST);
+  const earlier = existsSync(manifest)
+    ? readFileSync(manifest, "utf8").split("\n").filter(Boolean)
+    : [];
   for (const [path, wanted] of units) {
     const target = join(root, path);
     const exists = existsSync(target);
@@ -159,6 +166,11 @@ export function planSync(projectRoot: string): {
         changes.push({
           path,
           action: exists ? "replace" : "create",
+          ...(exists && !earlier.includes(path)
+            ? {
+                note: "no earlier sync wrote it, and sync replaces it whole; rename the project's own material of that name first",
+              }
+            : {}),
           apply: (r) => writeTree(join(r, path), wanted),
         });
     } else {
@@ -178,22 +190,17 @@ export function planSync(projectRoot: string): {
   }
 
   // Material an earlier Framework managed but this one no longer has.
-  const manifest = join(root, MANIFEST);
-  if (existsSync(manifest)) {
-    for (const path of readFileSync(manifest, "utf8")
-      .split("\n")
-      .filter(Boolean)) {
-      if (!MANAGED_PATH.test(path))
-        problems.push(
-          `${MANIFEST} lists a path the Framework never manages: ${path}`,
-        );
-      else if (!managed.includes(path) && existsSync(join(root, path)))
-        changes.push({
-          path,
-          action: "remove",
-          apply: (r) => rmSync(join(r, path), { recursive: true, force: true }),
-        });
-    }
+  for (const path of earlier) {
+    if (!MANAGED_PATH.test(path))
+      problems.push(
+        `${MANIFEST} lists a path the Framework never manages: ${path}`,
+      );
+    else if (!managed.includes(path) && existsSync(join(root, path)))
+      changes.push({
+        path,
+        action: "remove",
+        apply: (r) => rmSync(join(r, path), { recursive: true, force: true }),
+      });
   }
 
   // Git can restore only committed work, so refuse to overwrite anything else.
@@ -273,7 +280,9 @@ if (import.meta.main) {
   const check = options.includes("--check");
   for (const change of changes) {
     if (!check) change.apply(realpathSync(projectRoot));
-    console.log(`${check ? "would " : ""}${change.action} ${change.path}`);
+    console.log(
+      `${check ? "would " : ""}${change.action} ${change.path}${change.note ? `: ${change.note}` : ""}`,
+    );
   }
   if (check) process.exit(1);
 }

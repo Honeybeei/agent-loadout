@@ -43,13 +43,13 @@ Starting an implementation leaf: set it `in_progress` on `main` and commit, then
 
 | Branch | Unit | Approval |
 | --- | --- | --- |
-| `main` | One step that changes the Plan: a planning, a finished explore leaf, the start of an implementation, a merge, a reopened or closed node, a cancellation, or a changed Goal | Ask each time: say what was done since the last commit, and show the files and the message |
+| `main` | One step that changes the Plan: a planning, a finished explore leaf, the start of an implementation, a merge, a reopened or closed node, a cancellation, or a changed Goal; or one adoption, update, or conformance fix of the Framework | Ask each time: say what was done since the last commit, and show the files and the message |
 | `impl/<node>`, blackbox | One verified slice | None: the branch stays disposable until review |
 | `impl/<node>`, collaborative | One slice the user reviewed | Ask together with the slice review |
 
 - Commit only the files the step wrote, by path. Leave other changes and the staging area as they are. A declined commit stays uncommitted.
 - Write commit messages in English, in the Conventional Commits form `<type>(<scope>): <subject>`.
-- Lead session commits on `main` follow one pattern: `plan(<node>): <what happened>`, with the node the step is about as the scope. For example, `plan(web-service): plan three leaves and an explore`. `git log --grep '^plan('` then reads as the project's history of decisions and work.
+- A commit of a step that changes the Plan follows one pattern: `plan(<node>): <what happened>`, with the node the step is about as the scope. For example, `plan(web-service): plan three leaves and an explore`. `git log --grep '^plan('` then reads as the project's history of decisions and work. Commits that adopt or update the Framework, or bring the project in line with it, use `chore:`.
 - Code commits on `impl/<node>` follow the project's convention in `AGENTS.md`, or Conventional Commits types such as `feat` and `fix` when it has none.
 
 ## Integration

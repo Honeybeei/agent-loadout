@@ -42,12 +42,24 @@ function node(fields: Fields, body = ""): string {
   const yaml = Object.entries(fields)
     .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
     .join("\n");
-  return `---\n${yaml}\n---\n\n# ${fields.title ?? "Untitled"}\n\n## Goal\nA goal.\n${body}`;
+  // A Record as finishing leaves it, unless the body has one; an open goal needs none.
+  const finished = { goal: "Closed", explore: "Finished" }[fields.kind ?? ""];
+  const line =
+    fields.status === "done"
+      ? `- ${finished ?? "Implemented"}: done.\n`
+      : fields.status === "cancelled"
+        ? "- Cancelled: dropped.\n"
+        : "";
+  const record =
+    body.includes("## Record") || (fields.kind === "goal" && line === "")
+      ? ""
+      : `\n## Record\n${line}`;
+  return `---\n${yaml}\n---\n\n# ${fields.title ?? "Untitled"}\n\n## Goal\nA goal.\n${body}${record}`;
 }
 
 /** The sections every blackbox node needs, with the given Completion criteria. */
 const blackbox = (criteria = "") =>
-  `\n## Output\nA result.\n\n## Completion criteria\n${criteria}\n## Verification\n- Run it.\n\n## Record\n`;
+  `\n## Output\nA result.\n\n## Completion criteria\n${criteria}\n## Verification\n- Run it.\n`;
 
 function project(nodes: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), "dev-map-"));
@@ -487,6 +499,99 @@ describe("loadPlan problems", () => {
       'a: kind blackbox needs a "## Output" section',
     ],
     [
+      "a title heading that differs from the title",
+      {
+        root: sample.root,
+        a: leaf("A", "root", "explore", "todo").replace("# A", "# Other"),
+      },
+      'a: the title heading must be "# A"',
+    ],
+    [
+      "a section before Goal",
+      {
+        root: sample.root,
+        a: leaf("A", "root", "explore", "todo").replace(
+          "## Goal",
+          "## Notes\n- x\n\n## Goal",
+        ),
+      },
+      'a: the first section must be "## Goal"',
+    ],
+    [
+      "a section after Record",
+      {
+        root: sample.root,
+        a: leaf(
+          "A",
+          "root",
+          "collaborative",
+          "todo",
+          "\n## Record\n\n## Notes\n",
+        ),
+      },
+      'a: "## Record" must be the last section',
+    ],
+    [
+      "a section the kind's template lacks",
+      {
+        root: sample.root,
+        a: leaf("A", "root", "explore", "todo", "\n## Questions\n- Q?\n"),
+      },
+      'a: kind explore has no "## Questions" section',
+    ],
+    [
+      "sections out of template order",
+      {
+        root: sample.root,
+        a: leaf(
+          "A",
+          "root",
+          "explore",
+          "todo",
+          "\n## Out of scope\n- x\n\n## Tickets\n- [task] y\n",
+        ),
+      },
+      "a: put the sections in the order of the template",
+    ],
+    [
+      "an untagged ticket",
+      {
+        root: sample.root,
+        a: leaf(
+          "A",
+          "root",
+          "explore",
+          "todo",
+          "\n## Tickets\n- Which stack?\n",
+        ),
+      },
+      'a: tag the ticket "Which stack?"',
+    ],
+    [
+      "a done leaf without its finishing line",
+      {
+        root: sample.root,
+        a: leaf("A", "root", "explore", "done", "\n## Record\n- Planned: x\n"),
+      },
+      'a: a done explore needs a "Finished:" line in Record',
+    ],
+    [
+      "a cancelled node without a reason",
+      {
+        root: sample.root,
+        a: leaf("A", "root", "explore", "cancelled", "\n## Record\n"),
+      },
+      "a: a cancelled node states its reason in Record",
+    ],
+    [
+      "a done blackbox leaf with an unticked criterion",
+      {
+        root: sample.root,
+        a: leaf("A", "root", "blackbox", "done", blackbox("- [ ] It works.\n")),
+      },
+      "a: a done blackbox has an unticked Completion criterion",
+    ],
+    [
       "a done explore leaf with tickets left",
       {
         root: sample.root,
@@ -536,6 +641,24 @@ describe("loadPlan problems", () => {
     });
   }
 
+  test("a collaborative body is free, a goal may hold Goal alone, and headings in code are not sections", () => {
+    const errors = loadPlan(
+      project({
+        root: sample.root,
+        a: leaf("A", "root", "collaborative", "todo", "\n## Sketch\n- x\n"),
+        b: leaf(
+          "B",
+          "root",
+          "explore",
+          "todo",
+          "\n## Notes\n```md\n## Example\n```\n",
+        ),
+        c: goal("C", "root"),
+      }),
+    ).errors;
+    expect(errors).toEqual([]);
+  });
+
   test("a running explore or collaborative leaf may name .tmp/ paths; a dispatched blackbox leaf may not", () => {
     const notes = "\n## Notes\n- Raw notes: `.tmp/research/stack.md`\n";
     const errors = loadPlan(
@@ -543,7 +666,16 @@ describe("loadPlan problems", () => {
         root: sample.root,
         a: leaf("A", "root", "explore", "in_progress", notes),
         b: leaf("B", "root", "collaborative", "in_progress", notes),
-        c: leaf("C", "root", "blackbox", "in_progress", blackbox() + notes),
+        c: leaf(
+          "C",
+          "root",
+          "blackbox",
+          "in_progress",
+          blackbox().replace(
+            "A result.",
+            "Raw notes: `.tmp/research/stack.md`",
+          ),
+        ),
       }),
     ).errors;
     expect(errors).toEqual([

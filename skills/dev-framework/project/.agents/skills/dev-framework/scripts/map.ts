@@ -31,10 +31,49 @@ const KIND_STATUSES: Record<Kind, readonly Status[]> = {
   blackbox: ["todo", "in_progress", "done", "cancelled"],
 };
 
-/** Sections each kind must have; the template documents in knowledge/dev-framework/plan-documentation/ define them. */
-const REQUIRED_SECTIONS: Partial<Record<Kind, string[]>> = {
+/** Each kind's sections in template order, from knowledge/dev-framework/plan-documentation/; a collaborative body is free between Goal and Record. */
+const TEMPLATES: Record<Kind, string[] | undefined> = {
+  goal: ["Goal", "Completion criteria", "Out of scope", "Record"],
+  explore: [
+    "Goal",
+    "Notes",
+    "Tickets",
+    "Decisions so far",
+    "For the Plan",
+    "Not yet specified",
+    "Out of scope",
+    "Record",
+  ],
+  collaborative: undefined,
+  blackbox: [
+    "Goal",
+    "Output",
+    "Completion criteria",
+    "Interface",
+    "Out of scope",
+    "Relies on",
+    "Verification",
+    "Record",
+  ],
+};
+
+/** Sections each kind must have; a goal holds Goal alone until it is planned. */
+const REQUIRED_SECTIONS: Record<Kind, string[]> = {
+  goal: ["Goal"],
+  explore: ["Goal", "Record"],
+  collaborative: ["Goal", "Record"],
   blackbox: ["Goal", "Output", "Completion criteria", "Verification", "Record"],
 };
+
+/** The Record line that finishing a node of each kind adds. */
+const FINISHED_LINE: Record<Kind, string> = {
+  goal: "Closed",
+  explore: "Finished",
+  collaborative: "Implemented",
+  blackbox: "Implemented",
+};
+
+const TICKET = /^[-*+]\s+\[(?:grilling|research|prototype|task)\]\s/;
 
 export interface PlanNode {
   id: string;
@@ -72,19 +111,28 @@ const closable = (node: PlanNode) =>
   node.children.length > 0 &&
   node.children.every(finished);
 
-/** The node's H2 sections, in order. */
-function sections(body: string): { heading: string; lines: string[] }[] {
+/** The node's H2 sections, in order, outside fenced code. */
+export function sections(body: string): { heading: string; lines: string[] }[] {
   const result: { heading: string; lines: string[] }[] = [];
+  let fence: string | undefined;
   for (const line of body.split(/\r?\n/)) {
-    if (line.startsWith("## "))
+    const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (
+      marker !== undefined &&
+      (fence === undefined || marker.startsWith(fence))
+    )
+      fence = fence === undefined ? marker : undefined;
+    else if (fence === undefined && line.startsWith("## ")) {
       result.push({ heading: line.slice(3).trim(), lines: [] });
-    else result.at(-1)?.lines.push(line);
+      continue;
+    }
+    result.at(-1)?.lines.push(line);
   }
   return result;
 }
 
 /** The list items of one section, or none when the section is missing. */
-function items(body: string, heading: string): string[] {
+export function items(body: string, heading: string): string[] {
   const lines = sections(body).find((s) => s.heading === heading)?.lines ?? [];
   return lines.filter((line) => /^[-*+]\s/.test(line));
 }
@@ -107,6 +155,77 @@ export function temporaryPaths(text: string): string[] {
   return [...new Set(paths)].filter(
     (path) => !/^(?:\.{1,2}\/)*\/?\.tmp\/(?:plan\/|$)/.test(path),
   );
+}
+
+/** The node frame and its kind's template, as knowledge/dev-framework/plan-documentation.md defines them. */
+function checkFrame(
+  id: string,
+  title: string,
+  kind: Kind,
+  status: Status,
+  body: string,
+  errors: string[],
+): void {
+  const template = `knowledge/dev-framework/plan-documentation/${kind}.md`;
+  const headings = sections(body).map((s) => s.heading);
+  const h1 = /^# (.*)$/m.exec(body.split(/\n## /)[0] ?? "")?.[1]?.trim();
+  if (h1 !== title.trim())
+    errors.push(
+      `${id}: the title heading must be "# ${title.trim()}", the node's title`,
+    );
+  if (headings[0] !== "Goal")
+    errors.push(`${id}: the first section must be "## Goal"`);
+  if (headings.includes("Record") && headings.at(-1) !== "Record")
+    errors.push(`${id}: "## Record" must be the last section`);
+  for (const heading of REQUIRED_SECTIONS[kind])
+    if (!headings.includes(heading))
+      errors.push(
+        `${id}: kind ${kind} needs a "## ${heading}" section; add it as the template in ${template} shows`,
+      );
+  const order = TEMPLATES[kind];
+  if (order) {
+    for (const heading of headings.filter((h) => !order.includes(h)))
+      errors.push(
+        `${id}: kind ${kind} has no "## ${heading}" section; move its content into a section of the template in ${template}`,
+      );
+    const positions = headings
+      .filter((h) => order.includes(h))
+      .map((h) => order.indexOf(h));
+    if (
+      positions.some(
+        (position, i) => i > 0 && position <= (positions[i - 1] ?? -1),
+      )
+    )
+      errors.push(
+        `${id}: put the sections in the order of the template in ${template}: ${order.filter((h) => headings.includes(h)).join(", ")}`,
+      );
+  }
+  if (kind === "explore")
+    for (const ticket of items(body, "Tickets"))
+      if (!TICKET.test(ticket))
+        errors.push(
+          `${id}: tag the ticket "${ticket.slice(2, 60).trim()}" with [grilling], [research], [prototype], or [task]`,
+        );
+  const record = items(body, "Record");
+  const finished = FINISHED_LINE[kind];
+  if (
+    status === "done" &&
+    !record.some((line) => new RegExp(`^[-*+]\\s+${finished}:`).test(line))
+  )
+    errors.push(
+      `${id}: a done ${kind} needs a "${finished}:" line in Record, as ${template} says`,
+    );
+  if (status === "cancelled" && record.length === 0)
+    errors.push(`${id}: a cancelled node states its reason in Record`);
+  if (
+    status === "done" &&
+    items(body, "Completion criteria").some((line) =>
+      /^[-*+]\s+\[ \]/.test(line),
+    )
+  )
+    errors.push(
+      `${id}: a done ${kind} has an unticked Completion criterion; tick each verified one, or reopen the node`,
+    );
 }
 
 function parseNode(
@@ -134,7 +253,9 @@ function parseNode(
   const before = errors.length;
   for (const key of Object.keys(fields)) {
     if (!FIELDS.includes(key))
-      errors.push(`${id}: unknown frontmatter field "${key}"`);
+      errors.push(
+        `${id}: unknown frontmatter field "${key}"; keep the five node fields, and move other content into the node body`,
+      );
   }
   const { title, parent, depends_on: dependsOn, kind, status } = fields;
   if (typeof title !== "string" || title.trim() === "")
@@ -154,14 +275,13 @@ function parseNode(
     );
   if (errors.length > before) return undefined;
   const body = text.slice(match[0].length);
-  const headings = sections(body).map((s) => s.heading);
-  for (const heading of REQUIRED_SECTIONS[kind as Kind] ?? [])
-    if (!headings.includes(heading))
-      errors.push(`${id}: kind ${kind} needs a "## ${heading}" section`);
+  checkFrame(id, title as string, kind as Kind, status as Status, body, errors);
   if (kind === "explore" && status === "done")
     for (const heading of ["Tickets", "Not yet specified"])
       if (items(body, heading).length > 0)
-        errors.push(`${id}: a done explore leaf has no ${heading} left`);
+        errors.push(
+          `${id}: a done explore leaf has no ${heading} left; resolve or move each item as Finishing in knowledge/dev-framework/plan-documentation/explore.md says`,
+        );
   // A running explore or collaborative leaf is the working record; the other nodes outlive .tmp/.
   const working =
     status === "in_progress" &&
