@@ -32,7 +32,7 @@ When code findings or spec gaps need fixes, write them to `.tmp/reviews/<node>.m
 When nothing needs fixing, ask once, and show:
 
 - `impl/<node>` merging into `main`, with the message `plan(<node>): implement <title>`;
-- the leaf updates: the ticked criteria, any spec gaps added to Output or the criteria, the Record lines, and `done`;
+- the leaf updates: the ticked criteria, any spec gaps added to Output or the criteria, the Record lines, and `done`; and what the report found that moves to its owner;
 - the cleanup: removing the worktree and deleting the branch;
 - the question whether the implementation session is closed.
 
@@ -40,6 +40,6 @@ On approval:
 
 1. Run `git merge --no-ff --no-commit impl/<node>`.
 2. Run the automated checks `AGENTS.md` names. When one fails, run `git merge --abort`, write the failure to the review file, tell the user, and stop.
-3. Update the leaf: tick the met criteria, add each spec gap to Output or the criteria with a `Spec gap: <what was missing>` Record line, add `Implemented: <what was built>, <evidence>` to Record, set `done`, and regenerate the map. Stage exactly these Plan files.
+3. Update the leaf: tick the met criteria, add each spec gap to Output or the criteria with a `Spec gap: <what was missing>` Record line, add `Implemented: <what was built>, <evidence>` to Record, and set `done`. Move what the report found that later work relies on to its owner, as [Recording decisions](../../../../knowledge/dev-framework/plan-documentation.md#recording-decisions) says. Regenerate the map, and stage exactly the files this step changed.
 4. Commit the merge with its message.
 5. Clean up when the worktree has no uncommitted or untracked files, the branch is fully merged, and the user confirmed the implementation session is closed: run `git worktree remove <worktree>` and `git branch -d impl/<node>`, and delete `.tmp/reviews/<node>.md`. Otherwise, leave them in place and say why.

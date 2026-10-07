@@ -76,7 +76,7 @@ leaf   todo ──start──→ in_progress ──finish───────�
 
 ## Node frame
 
-Every node has the same frame. Its kind's document defines the body between Goal and Record.
+Every node has the same frame. Its kind's document defines the body between Goal and Record. The frame and that document govern every edit to the node, whichever skill makes it.
 
 ```markdown
 ---
@@ -90,7 +90,7 @@ status: <status>
 # <Title>
 
 ## Goal
-<What to achieve and why. When the goal changes, keep the original goal and the reason for the change.>
+<What to achieve and why>
 
 <body defined by the kind>
 
@@ -98,17 +98,21 @@ status: <status>
 - <One line per event in the node's life, linking to the detail>
 ```
 
+- When the meaning of a Goal changes, add `Goal changed: <the original Goal>, <the reason>` to Record.
+
 ## Recording decisions
 
-A decision is recorded with its owner:
+A decision, or a fact found along the way, is recorded with its owner:
 
 | The decision is | Its owner |
 | --- | --- |
 | A product or technical rule or design that stays valid | Knowledge, labeled if not yet implemented |
 | A decision about one piece of work, such as scope, order, or approach | That node |
 | A fact found by investigation | Knowledge if later work will rely on it, otherwise a summary in the node; never the raw material |
+| A term the user agrees on | The glossary |
 
-- A running explore or collaborative leaf holds its decisions in its own node. When it finishes, it applies them to their owners and the Plan in one step. Knowledge and other nodes stay unchanged until then, which saves repeated edits and absorbs decisions reversed along the way.
+- A running explore or collaborative leaf holds its decisions and findings in its own node. Knowledge and other nodes stay unchanged until it finishes, which saves repeated edits and absorbs decisions reversed along the way.
+- When it finishes, it accounts for every line of the node, wherever it sits, Notes and inputs for other nodes included: the line moves to its owner, or is specific to this work and stays. A moved line leaves its gist and a link to the owner, never a restatement, so the node ends as an index.
 - An answer the user gives is an approved decision. An agent's proposal stays open until the user confirms it.
 - Keep Record lines short. The detail lives in one owner, and Record links to it.
 - Keep failed attempts and cancelled work in Record; they explain later choices.

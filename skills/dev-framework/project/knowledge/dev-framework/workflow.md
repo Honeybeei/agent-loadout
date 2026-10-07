@@ -98,7 +98,7 @@ Before a `completed` report, the session merges `main` into `impl/<node>`, verif
 | `blocked`, or recalled by the lead session | Reopen: discard the worktree and the branch, set the leaf back to `todo`, and add an explore leaf holding the blocker's questions to its `depends_on` |
 
 - Review verifies the merged result itself; the report's evidence counts only for manual verification.
-- A report is removed with its worktree. Move what must last into the Plan before cleanup.
+- A report is removed with its worktree. Before cleanup, move what must last to its owner, as [Recording decisions](plan-documentation.md#recording-decisions) says.
 
 ## Changing Knowledge while blackbox leaves run
 
