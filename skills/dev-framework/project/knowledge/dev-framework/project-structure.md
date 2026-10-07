@@ -76,7 +76,7 @@ Root `.tmp/` holds temporary material such as research notes, prototypes, drafts
 
 - Git must exclude it with `/.tmp/` in `.gitignore`.
 - Use one subdirectory per purpose, such as `.tmp/research/<topic>/`, `.tmp/prototypes/<name>/`, `.tmp/reports/`, `.tmp/reviews/`, or `.tmp/handoffs/`.
-- Knowledge and Plan must not link to or depend on `.tmp/`. Move needed conclusions into them so they stay understandable after `.tmp/` is deleted.
+- Knowledge and Plan must not link to, name a path in, or depend on `.tmp/`. Move needed conclusions into them so they stay understandable after `.tmp/` is deleted.
 - Delete only material you created, and only after its conclusions are preserved. Report material of unclear origin instead of deleting it. Do not follow symlinks when deleting.
 
 ## Framework-managed material

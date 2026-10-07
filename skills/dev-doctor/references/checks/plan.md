@@ -6,7 +6,7 @@ Node frontmatter, kinds and status rules, the map, and what nodes contain. Read 
 
 | Finding | Usual fix |
 | --- | --- |
-| A Plan rule violation | Correct the frontmatter, the status, or the missing section, then regenerate the map |
+| A Plan rule violation | Correct what the message names, then regenerate the map |
 | A stale map | Regenerate it |
 
 ## Judgment checks

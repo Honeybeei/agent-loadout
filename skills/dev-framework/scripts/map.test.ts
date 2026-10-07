@@ -15,6 +15,7 @@ import {
   orderSteps,
   renderHtml,
   renderMap,
+  temporaryPaths,
 } from "../project/.agents/skills/dev-framework/scripts/map.ts";
 
 const MAP = join(
@@ -513,6 +514,20 @@ describe("loadPlan problems", () => {
       { root: sample.root, Bad_Name: leaf("B", "root", "explore", "todo") },
       "Bad_Name: file name must be kebab-case",
     ],
+    [
+      "a finished node that names a .tmp/ path",
+      {
+        root: sample.root,
+        a: leaf(
+          "A",
+          "root",
+          "explore",
+          "done",
+          "\n## Decisions so far\n- Stack → Astro; detail in `.tmp/research/stack.md`.\n",
+        ),
+      },
+      "a: names .tmp/research/stack.md in .tmp/, which may be deleted",
+    ],
   ];
   for (const [name, nodes, message] of cases) {
     test(name, () => {
@@ -520,6 +535,51 @@ describe("loadPlan problems", () => {
       expect(errors.some((error) => error.startsWith(message))).toBe(true);
     });
   }
+
+  test("a running explore or collaborative leaf may name .tmp/ paths; a dispatched blackbox leaf may not", () => {
+    const notes = "\n## Notes\n- Raw notes: `.tmp/research/stack.md`\n";
+    const errors = loadPlan(
+      project({
+        root: sample.root,
+        a: leaf("A", "root", "explore", "in_progress", notes),
+        b: leaf("B", "root", "collaborative", "in_progress", notes),
+        c: leaf("C", "root", "blackbox", "in_progress", blackbox() + notes),
+      }),
+    ).errors;
+    expect(errors).toEqual([
+      "c: names .tmp/research/stack.md in .tmp/, which may be deleted; move what later work needs into the node or Knowledge, and remove the path",
+    ]);
+  });
+});
+
+describe("temporaryPaths", () => {
+  test("finds paths into .tmp/ in prose, code spans, and links", () => {
+    const text = [
+      "Detail in `.tmp/research/web.md`.",
+      "The wireframe is in .tmp/prototypes/first-run/, variant A.",
+      "See [notes](../../.tmp/notes.md) and [root](/.tmp/drafts/a.md).",
+      "Again: `.tmp/research/web.md`",
+    ].join("\n");
+    expect(temporaryPaths(text)).toEqual([
+      ".tmp/research/web.md",
+      ".tmp/prototypes/first-run/",
+      "../../.tmp/notes.md",
+      "/.tmp/drafts/a.md",
+    ]);
+  });
+
+  test("skips fenced code, the directory itself, other .tmp directories, and the map view", () => {
+    const text = [
+      "```bash",
+      "bun run shots --out .tmp/shots/",
+      "```",
+      "├── .tmp/             Temporary material",
+      "The `.tmp/` directory is ignored.",
+      "The app caches in `apps/web/.tmp/cache`, `~/.tmp/x`, and <data>/.tmp/y.",
+      "Open `.tmp/plan/map.html` for the full picture.",
+    ].join("\n");
+    expect(temporaryPaths(text)).toEqual([]);
+  });
 });
 
 describe("command line", () => {

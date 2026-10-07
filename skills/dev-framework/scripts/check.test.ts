@@ -256,7 +256,31 @@ describe("findings", () => {
         "knowledge/topic.md": `${doc("Topic")}\nSee [notes](../.tmp/notes.md).\n`,
       },
       "links",
-      "knowledge/topic.md: links to ../.tmp/notes.md in .tmp/",
+      "knowledge/topic.md: names ../.tmp/notes.md in .tmp/, which may be deleted",
+    ],
+    [
+      "a .tmp/ path that Knowledge names without a link",
+      {
+        "knowledge/topic.md": `${doc("Topic")}\nThe detail is in \`.tmp/research/topic.md\`.\n`,
+      },
+      "links",
+      "knowledge/topic.md: names .tmp/research/topic.md in .tmp/",
+    ],
+    [
+      "a link to a heading that does not exist",
+      {
+        "knowledge/README.md":
+          "# Knowledge\n\nRead [localization](topic.md#localization).\n",
+        "knowledge/topic.md": `${doc("Topic")}\n## Pages and localization\n`,
+      },
+      "links",
+      "knowledge/README.md: broken link to topic.md#localization, which matches no heading",
+    ],
+    [
+      "a link to a heading of the same document that does not exist",
+      { "knowledge/README.md": "# Knowledge\n\nSee [below](#usage).\n" },
+      "links",
+      "knowledge/README.md: broken link to #usage, which matches no heading",
     ],
     [
       "Knowledge the root README does not reach",
@@ -324,6 +348,23 @@ describe("no false findings", () => {
         "# Knowledge\n\n```md\n[x](gone.md)\n```\n\n`[y](gone.md)` [Plan](/plan/README.md) [Web](https://example.com) [Top](#knowledge)\n",
     });
     expect(messages(root, "links")).toBe("");
+  });
+
+  test("links to existing headings pass, as GitHub names them", () => {
+    const root = project();
+    write(root, {
+      "knowledge/README.md": [
+        "# Knowledge",
+        "",
+        "[a](topic.md#pages-and-localization) [b](topic.md#the-dev-next-skill-v2)",
+        "[c](topic.md#setup-1) [d](topic.md#legacy) [e](topic.md#한국어-제목)",
+        "[f](topic.md#%ED%95%9C%EA%B5%AD%EC%96%B4-%EC%A0%9C%EB%AA%A9) [g](#top) [h](#knowledge)",
+        "[i](../plan/README.md#plan) [j](../AGENTS.md)",
+        "",
+      ].join("\n"),
+      "knowledge/topic.md": `${doc("Topic")}\n## Pages and localization\n\n## The \`dev-next\` skill (v2)\n\n## Setup\n\n## Setup\n\n<a id="legacy"></a>\n\n## 한국어 제목\n\n\`\`\`md\n## Not a heading\n\`\`\`\n`,
+    });
+    expect(messages(root, "links")).not.toContain("matches no heading");
   });
 
   test("Knowledge reached through a directory link and subdocs passes", () => {

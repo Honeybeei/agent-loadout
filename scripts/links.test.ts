@@ -1,9 +1,14 @@
 import { expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
+import {
+  anchors,
+  markdownLinks,
+} from "../skills/dev-framework/scripts/check.ts";
 import { REPO } from "./apply.ts";
 
-// Every relative link in the repository's Markdown must point at a file or directory that exists.
+// Every relative link in the repository's Markdown must point at a file or directory that exists,
+// and a fragment into a Markdown file at one of its headings.
 function markdownFiles(path: string): string[] {
   if (path.endsWith(".md")) return [path];
   if (!existsSync(path) || path.endsWith("node_modules")) return [];
@@ -12,13 +17,6 @@ function markdownFiles(path: string): string[] {
   } catch {
     return [];
   }
-}
-
-function relativeLinks(text: string): string[] {
-  const prose = text.replace(/```[\s\S]*?```/g, "").replace(/`[^`\n]*`/g, "");
-  return [...prose.matchAll(/\]\(([^)\s]+)\)/g)]
-    .map((match) => (match[1] ?? "").split("#")[0] ?? "")
-    .filter((target) => target !== "" && !/^[a-z][a-z0-9+.-]*:/i.test(target));
 }
 
 const files = ["README.md", "AGENTS.md", "prompt", "skills", ".agents"].flatMap(
@@ -31,9 +29,18 @@ test("finds the documents to check", () => {
 
 for (const file of files) {
   test(`${relative(REPO, file)} has no broken relative links`, () => {
-    const broken = relativeLinks(readFileSync(file, "utf8")).filter(
-      (target) => !existsSync(resolve(dirname(file), target)),
+    const broken = markdownLinks(readFileSync(file, "utf8")).filter(
+      ({ file: path, fragment }) => {
+        const target = path === "" ? file : resolve(dirname(file), path);
+        if (!existsSync(target)) return true;
+        if (fragment === undefined || statSync(target).isDirectory())
+          return false;
+        return (
+          target.endsWith(".md") &&
+          !anchors(readFileSync(target, "utf8")).has(fragment)
+        );
+      },
     );
-    expect(broken).toEqual([]);
+    expect(broken.map((link) => link.target)).toEqual([]);
   });
 }

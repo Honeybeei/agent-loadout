@@ -22,6 +22,7 @@ import {
 import {
   loadPlan,
   renderMap,
+  temporaryPaths,
 } from "../project/.agents/skills/dev-framework/scripts/map.ts";
 import { planSync } from "./sync.ts";
 
@@ -220,21 +221,96 @@ function topicOwners(
   return topics;
 }
 
-/** The relative link targets of a document, outside code, resolved to absolute paths. */
+export interface Link {
+  /** The link as written, such as `guide.md#setup`. */
+  target: string;
+  /** The file part; empty for a link within the same document. */
+  file: string;
+  /** The decoded fragment, when the link has one. */
+  fragment?: string;
+}
+
+/** The relative links of a Markdown text, outside code. */
+export function markdownLinks(text: string): Link[] {
+  return [...withoutCode(text).matchAll(/\]\(([^)\s]+)\)/g)]
+    .map((match) => match[1] ?? "")
+    .filter((target) => !/^[a-z][a-z0-9+.-]*:/i.test(target))
+    .map((target) => {
+      const [file = "", raw = ""] = target.split(/#(.*)/s);
+      let fragment = raw;
+      try {
+        fragment = decodeURIComponent(raw);
+      } catch {}
+      return fragment === "" ? { target, file } : { target, file, fragment };
+    })
+    .filter((link) => link.file !== "" || link.fragment !== undefined);
+}
+
+/** A heading's anchor as GitHub makes it from the heading's rendered text. */
+const slug = (heading: string) =>
+  heading
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/<[^>]+>/g, "")
+    .replace(/`+([^`]*?)`+/g, "$1")
+    .replace(/(^|[^\p{L}\p{N}])[*_]+(?=[\p{L}\p{N}])/gu, "$1")
+    .replace(/(?<=[\p{L}\p{N}])[*_]+(?=[^\p{L}\p{N}]|$)/gu, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, "")
+    .replace(/ /g, "-");
+
+/** The anchors a link fragment can target: ATX heading slugs, numbered when repeated, and HTML ids. */
+export function anchors(text: string): Set<string> {
+  const found = new Set(["top"]);
+  const repeats = new Map<string, number>();
+  let fence: string | undefined;
+  for (const line of splitFrontmatter(text).body.split(/\r?\n/)) {
+    const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (fence !== undefined || marker !== undefined) {
+      if (fence === undefined) fence = marker;
+      else if (
+        marker !== undefined &&
+        marker[0] === fence[0] &&
+        marker.length >= fence.length
+      )
+        fence = undefined;
+      continue;
+    }
+    const heading = /^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/.exec(
+      line,
+    );
+    if (heading) {
+      const base = slug(heading[1] ?? "");
+      let anchor = base;
+      while (found.has(anchor)) {
+        const count = (repeats.get(base) ?? 0) + 1;
+        repeats.set(base, count);
+        anchor = `${base}-${count}`;
+      }
+      found.add(anchor);
+    }
+    for (const match of line.matchAll(/<[a-z][^>]*\s(?:id|name)="([^"]+)"/gi))
+      found.add(match[1] ?? "");
+  }
+  return found;
+}
+
+/** The relative links of a document, resolved to absolute paths; a link within the document resolves to itself. */
 function relativeLinks(
   root: string,
   path: string,
-): { target: string; resolved: string }[] {
-  const text = withoutCode(readFileSync(join(root, path), "utf8"));
-  return [...text.matchAll(/\]\(([^)\s]+)\)/g)]
-    .map((match) => (match[1] ?? "").split("#")[0] ?? "")
-    .filter((target) => target !== "" && !/^[a-z][a-z0-9+.-]*:/i.test(target))
-    .map((target) => ({
-      target,
-      resolved: target.startsWith("/")
-        ? join(root, target)
-        : resolve(dirname(join(root, path)), target),
-    }));
+): (Link & { resolved: string })[] {
+  const document = join(root, path);
+  return markdownLinks(readFileSync(document, "utf8")).map((link) => ({
+    ...link,
+    resolved:
+      link.file === ""
+        ? document
+        : link.file.startsWith("/")
+          ? join(root, link.file)
+          : resolve(dirname(document), link.file),
+  }));
 }
 
 /** Documents reachable from the root README through links, directory READMEs, and subdocs. */
@@ -397,15 +473,41 @@ export function diagnose(projectRoot: string): {
   const inKnowledgeOrPlan = (path: string) =>
     path.startsWith("plan/") ||
     knowledgeDirectories.some((directory) => path.startsWith(`${directory}/`));
+  const anchorsOf = new Map<string, Set<string>>();
   for (const path of markdown)
-    for (const { target, resolved } of relativeLinks(root, path)) {
+    for (const { target, fragment, resolved } of relativeLinks(root, path)) {
       const inTemporary = !relative(join(root, ".tmp"), resolved).startsWith(
         "..",
       );
-      if (inTemporary && inKnowledgeOrPlan(path))
-        add("links", `${path}: links to ${target} in .tmp/`);
-      else if (!existsSync(resolved))
+      // Reported below as a .tmp/ path, or by the Plan checks for a node.
+      if (inTemporary && inKnowledgeOrPlan(path)) continue;
+      if (!existsSync(resolved))
         add("links", `${path}: broken link to ${target}`);
+      else if (fragment !== undefined && resolved.endsWith(".md")) {
+        const found =
+          anchorsOf.get(resolved) ?? anchors(readFileSync(resolved, "utf8"));
+        anchorsOf.set(resolved, found);
+        if (!found.has(fragment))
+          add(
+            "links",
+            `${path}: broken link to ${target}, which matches no heading`,
+          );
+      }
+    }
+  // Plan nodes are left to the Plan checks, which spare running leaves.
+  for (const path of markdown)
+    if (
+      inKnowledgeOrPlan(path) &&
+      !MANAGED_DOCUMENT.test(path) &&
+      path !== "plan/map.md" &&
+      !path.startsWith("plan/nodes/")
+    ) {
+      const named = temporaryPaths(readFileSync(join(root, path), "utf8"));
+      if (named.length > 0)
+        add(
+          "links",
+          `${path}: names ${named.join(", ")} in .tmp/, which may be deleted; move what it needs into the document, and remove the path`,
+        );
     }
   const linked = reachable(root);
   const navigable = (path: string) =>
