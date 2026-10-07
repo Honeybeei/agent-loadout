@@ -1,5 +1,5 @@
 // Diagnoses a project against the installed Dev Framework. It changes nothing.
-// Usage: bun check.ts [project-root] [--group <id>[,<id>...]|all]
+// Usage: bun check.ts [project-root] [--group <id>[,<id>...]|all [--changed-since <commit>]]
 // Add a check only when the same mistake keeps recurring; judging content stays with the agent.
 import { spawnSync } from "node:child_process";
 import {
@@ -22,6 +22,7 @@ import {
 import {
   loadPlan,
   renderMap,
+  temporaryPaths,
 } from "../project/.agents/skills/dev-framework/scripts/map.ts";
 import { planSync } from "./sync.ts";
 
@@ -42,8 +43,12 @@ export interface Finding {
   area: Area;
   message: string;
 }
-// Independent pieces of work for each group's judgment checks.
-export type Units = Partial<Record<Group, string[]>>;
+// Independent pieces of work for each group's judgment checks, with the files each one judges.
+export interface Unit {
+  name: string;
+  files: string[];
+}
+export type Units = Partial<Record<Group, Unit[]>>;
 type Add = (area: Area, message: string) => void;
 
 const REQUIRED = [
@@ -56,6 +61,9 @@ const REQUIRED = [
 const RESERVED = ["knowledge", "plan", ".tmp", ".git", ".agents", ".claude"];
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MANAGED_DOCUMENT = /^knowledge\/dev-framework(?:\.md$|\/)/;
+// Progress wording that Knowledge must not hold.
+const BUILD_STATUS =
+  /\bnot (?:yet )?implemented\b|\bnot (?:yet built|built yet)\b|\bunimplemented\b/i;
 // Skills that earlier Framework versions put into projects.
 const OLD_SKILL =
   /^(?:dev-check(?:-[a-z-]+)?|dev-conformance|dev-cycle|dev-framework-report|dev-init|dev-ssot|dev-update|development-cycle|inspect-project)$/;
@@ -220,21 +228,105 @@ function topicOwners(
   return topics;
 }
 
-/** The relative link targets of a document, outside code, resolved to absolute paths. */
+export interface Link {
+  /** The link as written, such as `guide.md#setup`. */
+  target: string;
+  /** The file part; empty for a link within the same document. */
+  file: string;
+  /** The decoded fragment, when the link has one. */
+  fragment?: string;
+}
+
+/** The relative links of a Markdown text, outside code. */
+export function markdownLinks(text: string): Link[] {
+  return [...withoutCode(text).matchAll(/\]\(([^)\s]+)\)/g)]
+    .map((match) => match[1] ?? "")
+    .filter((target) => !/^[a-z][a-z0-9+.-]*:/i.test(target))
+    .map((target) => {
+      const [file = "", raw = ""] = target.split(/#(.*)/s);
+      let fragment = raw;
+      try {
+        fragment = decodeURIComponent(raw);
+      } catch {}
+      return fragment === "" ? { target, file } : { target, file, fragment };
+    })
+    .filter((link) => link.file !== "" || link.fragment !== undefined);
+}
+
+/** A heading's anchor as GitHub makes it from the heading's rendered text. */
+const slug = (heading: string) =>
+  heading
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/<[^>]+>/g, "")
+    .replace(/`+([^`]*?)`+/g, "$1")
+    .replace(/(^|[^\p{L}\p{N}])[*_]+(?=[\p{L}\p{N}])/gu, "$1")
+    .replace(/(?<=[\p{L}\p{N}])[*_]+(?=[^\p{L}\p{N}]|$)/gu, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, "")
+    .replace(/ /g, "-");
+
+/** The anchors a link fragment can target: heading slugs, numbered when repeated, HTML ids, and `top`. */
+export function anchors(text: string): Set<string> {
+  const found = new Set<string>();
+  const repeats = new Map<string, number>();
+  const add = (heading: string) => {
+    const base = slug(heading);
+    let anchor = base;
+    while (found.has(anchor)) {
+      const count = (repeats.get(base) ?? 0) + 1;
+      repeats.set(base, count);
+      anchor = `${base}-${count}`;
+    }
+    found.add(anchor);
+  };
+  let fence: string | undefined;
+  let previous = "";
+  for (const line of splitFrontmatter(text).body.split(/\r?\n/)) {
+    const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (fence !== undefined || marker !== undefined) {
+      if (fence === undefined) fence = marker;
+      else if (
+        marker !== undefined &&
+        marker[0] === fence[0] &&
+        marker.length >= fence.length
+      )
+        fence = undefined;
+      previous = "";
+      continue;
+    }
+    const atx = /^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/.exec(line);
+    // A setext underline makes the paragraph line above it a heading.
+    const setext =
+      /^ {0,3}(?:=+|-+)[ \t]*$/.test(line) &&
+      /^ {0,3}[^\s#>|*+\-`~<]/.test(previous) &&
+      !/^ {0,3}\d+[.)]\s/.test(previous);
+    if (atx) add(atx[1] ?? "");
+    else if (setext) add(previous);
+    for (const match of line.matchAll(/<[a-z][^>]*\s(?:id|name)="([^"]+)"/gi))
+      found.add(match[1] ?? "");
+    previous = atx || setext ? "" : line;
+  }
+  found.add("top");
+  return found;
+}
+
+/** The relative links of a document, resolved to absolute paths; a link within the document resolves to itself. */
 function relativeLinks(
   root: string,
   path: string,
-): { target: string; resolved: string }[] {
-  const text = withoutCode(readFileSync(join(root, path), "utf8"));
-  return [...text.matchAll(/\]\(([^)\s]+)\)/g)]
-    .map((match) => (match[1] ?? "").split("#")[0] ?? "")
-    .filter((target) => target !== "" && !/^[a-z][a-z0-9+.-]*:/i.test(target))
-    .map((target) => ({
-      target,
-      resolved: target.startsWith("/")
-        ? join(root, target)
-        : resolve(dirname(join(root, path)), target),
-    }));
+): (Link & { resolved: string })[] {
+  const document = join(root, path);
+  return markdownLinks(readFileSync(document, "utf8")).map((link) => ({
+    ...link,
+    resolved:
+      link.file === ""
+        ? document
+        : link.file.startsWith("/")
+          ? join(root, link.file)
+          : resolve(dirname(document), link.file),
+  }));
 }
 
 /** Documents reachable from the root README through links, directory READMEs, and subdocs. */
@@ -392,20 +484,57 @@ export function diagnose(projectRoot: string): {
         "ssot",
         `"${topic}" is in canonical_for of ${owners.join(" and ")}; give it one owner`,
       );
+  for (const path of knowledge) {
+    if (MANAGED_DOCUMENT.test(path)) continue;
+    const status = BUILD_STATUS.exec(
+      withoutCode(readFileSync(join(root, path), "utf8")),
+    )?.[0];
+    if (status)
+      add(
+        "ssot",
+        `${path}: says "${status}"; Knowledge never states how far something is built, since the Plan and the code say that`,
+      );
+  }
 
   // Links
   const inKnowledgeOrPlan = (path: string) =>
     path.startsWith("plan/") ||
     knowledgeDirectories.some((directory) => path.startsWith(`${directory}/`));
+  const anchorsOf = new Map<string, Set<string>>();
   for (const path of markdown)
-    for (const { target, resolved } of relativeLinks(root, path)) {
+    for (const { target, fragment, resolved } of relativeLinks(root, path)) {
       const inTemporary = !relative(join(root, ".tmp"), resolved).startsWith(
         "..",
       );
-      if (inTemporary && inKnowledgeOrPlan(path))
-        add("links", `${path}: links to ${target} in .tmp/`);
-      else if (!existsSync(resolved))
+      // Reported below as a .tmp/ path, or by the Plan checks for a node.
+      if (inTemporary && inKnowledgeOrPlan(path)) continue;
+      if (!existsSync(resolved))
         add("links", `${path}: broken link to ${target}`);
+      else if (fragment !== undefined && resolved.endsWith(".md")) {
+        const found =
+          anchorsOf.get(resolved) ?? anchors(readFileSync(resolved, "utf8"));
+        anchorsOf.set(resolved, found);
+        if (!found.has(fragment))
+          add(
+            "links",
+            `${path}: broken link to ${target}, which matches no heading`,
+          );
+      }
+    }
+  // Plan nodes are left to the Plan checks, which spare running leaves.
+  for (const path of markdown)
+    if (
+      inKnowledgeOrPlan(path) &&
+      !MANAGED_DOCUMENT.test(path) &&
+      path !== "plan/map.md" &&
+      !path.startsWith("plan/nodes/")
+    ) {
+      const named = temporaryPaths(readFileSync(join(root, path), "utf8"));
+      if (named.length > 0)
+        add(
+          "links",
+          `${path}: names ${named.join(", ")} in .tmp/, which may be deleted; move what it needs into the document, and remove the path`,
+        );
     }
   const linked = reachable(root);
   const navigable = (path: string) =>
@@ -445,18 +574,58 @@ export function diagnose(projectRoot: string): {
       if (OLD_SKILL.test(name))
         add("leftovers", `.agents/skills/${name} is from an earlier Framework`);
 
+  const file = (path: string): Unit => ({ name: path, files: [path] });
+  // The project rules in the root AGENTS.md, outside the managed section.
+  const agents = exists("AGENTS.md") ? [file("AGENTS.md")] : [];
   const units: Units = {
-    plan: documents.filter((path) => /^plan\/nodes\/[^/]+\.md$/.test(path)),
-    ssot: topics
-      .filter(({ owners }) => owners.some((o) => !MANAGED_DOCUMENT.test(o)))
-      .map(({ topic, owners }) => `${topic}: ${owners.join(", ")}`),
-    links: documents,
-    writing: documents,
+    structure: agents,
+    plan: documents
+      .filter((path) => /^plan\/nodes\/[^/]+\.md$/.test(path))
+      .map(file),
+    ssot: [
+      ...topics
+        .filter(({ owners }) => owners.some((o) => !MANAGED_DOCUMENT.test(o)))
+        .map(({ topic, owners }) => ({
+          name: `${topic}: ${owners.join(", ")}`,
+          files: owners,
+        })),
+      ...agents,
+    ],
+    links: documents.map(file),
+    writing: documents.map(file),
   };
   return { state, findings, units };
 }
 
-const USAGE = "Usage: bun check.ts [project-root] [--group <id>[,<id>...]|all]";
+/**
+ * The files that differ from a commit, uncommitted and untracked ones included,
+ * or undefined when the Framework rules changed since, so that every unit needs judging again.
+ */
+export function changedSince(
+  projectRoot: string,
+  commit: string,
+): Set<string> | undefined {
+  const root = realpathSync(projectRoot);
+  const rules = git(root, [
+    "diff",
+    "--name-only",
+    commit,
+    "--",
+    "knowledge/dev-framework.md",
+    "knowledge/dev-framework",
+  ]).stdout;
+  if (rules.trim() !== "") return undefined;
+  const files = [
+    ...git(root, ["diff", "--name-only", "-z", commit]).stdout.split("\0"),
+    ...git(root, ["ls-files", "-o", "--exclude-standard", "-z"]).stdout.split(
+      "\0",
+    ),
+  ];
+  return new Set(files.filter((path) => path !== ""));
+}
+
+const USAGE =
+  "Usage: bun check.ts [project-root] [--group <id>[,<id>...]|all [--changed-since <commit>]]";
 
 function print(title: string, lines: string[]): void {
   console.log(`\n${title}\n${lines.map((line) => `- ${line}`).join("\n")}`);
@@ -464,22 +633,33 @@ function print(title: string, lines: string[]): void {
 
 if (import.meta.main) {
   const args = process.argv.slice(2);
-  const option = args.indexOf("--group");
-  const groupArgument = option === -1 ? undefined : (args[option + 1] ?? "");
-  const positional = args.filter(
-    (_, i) => option === -1 || (i !== option && i !== option + 1),
-  );
+  const options = new Map<string, string>();
+  const positional: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] ?? "";
+    if (arg === "--group" || arg === "--changed-since")
+      options.set(arg, args[++i] ?? "");
+    else positional.push(arg);
+  }
+  const groupArgument = options.get("--group");
+  const since = options.get("--changed-since");
   const selected =
     groupArgument === "all" ? [...GROUPS] : groupArgument?.split(",");
+  const root = resolve(positional[0] ?? ".");
   if (
     positional.length > 1 ||
     positional.some((arg) => arg.startsWith("--")) ||
-    selected?.some((id) => !(GROUPS as readonly string[]).includes(id))
+    selected?.some((id) => !(GROUPS as readonly string[]).includes(id)) ||
+    (since !== undefined &&
+      (selected === undefined ||
+        git(root, ["rev-parse", "--verify", "--quiet", `${since}^{commit}`])
+          .status !== 0))
   ) {
     console.error(`${USAGE}\nGroups: ${GROUPS.join(", ")}`);
     process.exit(2);
   }
-  const { state, findings, units } = diagnose(resolve(positional[0] ?? "."));
+  const changed = since === undefined ? undefined : changedSince(root, since);
+  const { state, findings, units } = diagnose(root);
   const messages = (area: Area) =>
     findings.filter((f) => f.area === area).map((f) => f.message);
   console.log(`State: ${state}`);
@@ -505,8 +685,18 @@ if (import.meta.main) {
     for (const message of found) console.log(`- ${message}`);
     const list = units[group];
     if (list === undefined) continue;
-    console.log(`Judgment units: ${list.length}`);
-    for (const unit of list) console.log(`- ${unit}`);
+    const shown =
+      changed === undefined
+        ? list
+        : list.filter((unit) => unit.files.some((path) => changed.has(path)));
+    const scope =
+      since === undefined
+        ? ""
+        : changed === undefined
+          ? `, all because the Framework rules changed since ${since}`
+          : ` of ${list.length}, changed since ${since}`;
+    console.log(`Judgment units: ${shown.length}${scope}`);
+    for (const unit of shown) console.log(`- ${unit.name}`);
   }
   process.exit(
     findings.some((f) => (selected as string[]).includes(f.area)) ? 1 : 0,

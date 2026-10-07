@@ -38,7 +38,7 @@ For other work: observable behavior, results, examples. Images and references ar
 
 ## Record
 - Dispatched: impl/<node>
-- Implemented: <what was built>, <evidence such as checks and the merge>
+- Implemented: <what was built, linking the Knowledge it implements>, <evidence such as checks and the merge>
 - Reopened: <why the implementation stopped>, <the explore leaf that holds its questions>
 - Spec gap: <what the review found missing from the node>
 ```

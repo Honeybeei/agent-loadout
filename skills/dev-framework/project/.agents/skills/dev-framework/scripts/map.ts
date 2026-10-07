@@ -1,6 +1,7 @@
 // Generates plan/map.md and the browser view .tmp/plan/map.html from plan/nodes/*.md,
 // and reports Plan structure problems.
 // Usage: bun map.ts [project-root] [--check]
+// Each problem blocks the map, so a check belongs here only when an edit to the node can always fix it.
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -92,6 +93,22 @@ export function countOpenTickets(body: string): number {
   return items(body, "Tickets").length;
 }
 
+/**
+ * Paths into the project's .tmp/ that a text names, in prose, links, or code spans, but not in fenced code.
+ * A path counts when it starts a token, alone or after ./, ../, or /; the regenerable .tmp/plan/ view is allowed.
+ */
+export function temporaryPaths(text: string): string[] {
+  const prose = text.replace(/(```|~~~)[\s\S]*?\1/g, "");
+  const paths = [
+    ...prose.matchAll(
+      /(?<=^|[\s(["'`])(?:\.{1,2}\/)*\/?\.tmp\/[\w.<-][^\s"'`()[\]<>|,;]*/gm,
+    ),
+  ].map((match) => match[0].replace(/[.:]+$/, ""));
+  return [...new Set(paths)].filter(
+    (path) => !/^(?:\.{1,2}\/)*\/?\.tmp\/(?:plan\/|$)/.test(path),
+  );
+}
+
 function parseNode(
   id: string,
   text: string,
@@ -145,6 +162,15 @@ function parseNode(
     for (const heading of ["Tickets", "Not yet specified"])
       if (items(body, heading).length > 0)
         errors.push(`${id}: a done explore leaf has no ${heading} left`);
+  // A running explore or collaborative leaf is the working record; the other nodes outlive .tmp/.
+  const working =
+    status === "in_progress" &&
+    (kind === "explore" || kind === "collaborative");
+  const named = working ? [] : temporaryPaths(body);
+  if (named.length > 0)
+    errors.push(
+      `${id}: names ${named.join(", ")} in .tmp/, which may be deleted; move what later work needs into the node or Knowledge, and remove the path`,
+    );
   return {
     id,
     title: title as string,

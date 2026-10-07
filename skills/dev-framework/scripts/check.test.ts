@@ -245,6 +245,14 @@ describe("findings", () => {
       '"Deployment" is in canonical_for of knowledge/deploy.md and knowledge/ops.md',
     ],
     [
+      "build status in Knowledge",
+      {
+        "knowledge/chat.md": `${doc("Chat")}\nChat streams answers. Not yet implemented.\n`,
+      },
+      "ssot",
+      'knowledge/chat.md: says "Not yet implemented"; Knowledge never states how far something is built',
+    ],
+    [
       "a topic that a Framework document owns",
       { "knowledge/style.md": doc("Documentation style") },
       "ssot",
@@ -256,7 +264,31 @@ describe("findings", () => {
         "knowledge/topic.md": `${doc("Topic")}\nSee [notes](../.tmp/notes.md).\n`,
       },
       "links",
-      "knowledge/topic.md: links to ../.tmp/notes.md in .tmp/",
+      "knowledge/topic.md: names ../.tmp/notes.md in .tmp/, which may be deleted",
+    ],
+    [
+      "a .tmp/ path that Knowledge names without a link",
+      {
+        "knowledge/topic.md": `${doc("Topic")}\nThe detail is in \`.tmp/research/topic.md\`.\n`,
+      },
+      "links",
+      "knowledge/topic.md: names .tmp/research/topic.md in .tmp/",
+    ],
+    [
+      "a link to a heading that does not exist",
+      {
+        "knowledge/README.md":
+          "# Knowledge\n\nRead [localization](topic.md#localization).\n",
+        "knowledge/topic.md": `${doc("Topic")}\n## Pages and localization\n`,
+      },
+      "links",
+      "knowledge/README.md: broken link to topic.md#localization, which matches no heading",
+    ],
+    [
+      "a link to a heading of the same document that does not exist",
+      { "knowledge/README.md": "# Knowledge\n\nSee [below](#usage).\n" },
+      "links",
+      "knowledge/README.md: broken link to #usage, which matches no heading",
     ],
     [
       "Knowledge the root README does not reach",
@@ -326,6 +358,23 @@ describe("no false findings", () => {
     expect(messages(root, "links")).toBe("");
   });
 
+  test("links to existing headings pass, as GitHub names them", () => {
+    const root = project();
+    write(root, {
+      "knowledge/README.md": [
+        "# Knowledge",
+        "",
+        "[a](topic.md#pages-and-localization) [b](topic.md#the-dev-next-skill-v2)",
+        "[c](topic.md#setup-1) [d](topic.md#legacy) [e](topic.md#한국어-제목)",
+        "[f](topic.md#%ED%95%9C%EA%B5%AD%EC%96%B4-%EC%A0%9C%EB%AA%A9) [g](#top) [h](#knowledge)",
+        "[i](../plan/README.md#plan) [j](../AGENTS.md) [k](topic.md#install) [l](topic.md#top)",
+        "",
+      ].join("\n"),
+      "knowledge/topic.md": `${doc("Topic")}\n## Pages and localization\n\n## The \`dev-next\` skill (v2)\n\n## Setup\n\n## Setup\n\n<a id="legacy"></a>\n\n## 한국어 제목\n\n\`\`\`md\n## Not a heading\n\`\`\`\n\nInstall\n=======\n\n- not a heading\n---\n\n## Top\n`,
+    });
+    expect(messages(root, "links")).not.toContain("matches no heading");
+  });
+
   test("Knowledge reached through a directory link and subdocs passes", () => {
     const root = project();
     write(root, {
@@ -378,15 +427,18 @@ describe("hard wraps", () => {
   });
 });
 
-test("judgment units list nodes, topics, and maintained documents", () => {
+test("judgment units list nodes, topics, maintained documents, and AGENTS.md", () => {
   const root = project();
   write(root, { "knowledge/topic.md": doc("Topic") });
   const { units } = diagnose(root);
-  expect(units.plan).toEqual(["plan/nodes/root.md"]);
-  expect(units.ssot).toEqual(["Topic: knowledge/topic.md"]);
-  expect(units.writing).toContain("knowledge/topic.md");
-  expect(units.writing).not.toContain("plan/map.md");
-  expect(units.writing).not.toContain("knowledge/dev-framework.md");
+  const names = (group: keyof typeof units) =>
+    units[group]?.map((unit) => unit.name);
+  expect(names("structure")).toEqual(["AGENTS.md"]);
+  expect(names("plan")).toEqual(["plan/nodes/root.md"]);
+  expect(names("ssot")).toEqual(["Topic: knowledge/topic.md", "AGENTS.md"]);
+  expect(names("writing")).toContain("knowledge/topic.md");
+  expect(names("writing")).not.toContain("plan/map.md");
+  expect(names("writing")).not.toContain("knowledge/dev-framework.md");
 });
 
 describe("CLI", () => {
@@ -429,5 +481,53 @@ describe("CLI", () => {
 
   test("rejects an unknown group", () => {
     expect(run(project(), "--group", "style").exitCode).toBe(2);
+  });
+
+  test("--changed-since lists only the units changed since the commit, uncommitted and untracked ones included", () => {
+    const root = project();
+    write(root, {
+      "knowledge/README.md": "# Knowledge\n\nRead [the topic](topic.md).\n",
+      "knowledge/topic.md": doc("Topic"),
+    });
+    git(root, "add", "-A");
+    git(root, "commit", "-q", "-m", "Add a topic");
+    write(root, {
+      "knowledge/topic.md": `${doc("Topic")}\nChanged.\n`,
+      "docs/new.md": "# New\n",
+    });
+    const out = run(
+      root,
+      "--group",
+      "ssot,writing",
+      "--changed-since",
+      "HEAD",
+    ).stdout.toString();
+    expect(out).toContain(
+      "Judgment units: 1 of 2, changed since HEAD\n- Topic: knowledge/topic.md\n",
+    );
+    expect(out).toContain(
+      "Judgment units: 2 of 7, changed since HEAD\n- docs/new.md\n- knowledge/topic.md\n",
+    );
+  });
+
+  test("--changed-since lists every unit when the Framework rules changed", () => {
+    const root = project();
+    write(root, {
+      "knowledge/dev-framework/writing-rules.md":
+        "---\nmanaged_by: dev-framework\n---\n\n# Edited\n",
+    });
+    expect(
+      run(root, "--group", "plan", "--changed-since", "HEAD").stdout.toString(),
+    ).toContain(
+      "Judgment units: 1, all because the Framework rules changed since HEAD\n",
+    );
+  });
+
+  test("--changed-since needs --group and a known commit", () => {
+    const root = project();
+    expect(run(root, "--changed-since", "HEAD").exitCode).toBe(2);
+    expect(
+      run(root, "--group", "plan", "--changed-since", "nope").exitCode,
+    ).toBe(2);
   });
 });

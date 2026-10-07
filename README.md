@@ -39,7 +39,7 @@ agent-loadout/
 ├── prompt/              Global prompt parts
 │   ├── common.md        Shared by every harness
 │   └── <harness>.md     Per-harness additions
-├── scripts/             Apply script and repository tests
+├── scripts/             Apply script, size report, and repository tests
 └── skills/              Copied one-to-one into each harness's skills directory
     ├── dev-framework/   Framework source, no SKILL.md
     │   └── project/     Mirrors a project root; copied into Framework projects,
@@ -87,4 +87,5 @@ bun install
 bun run lint
 bun run typecheck
 bun run test
+bun run size [base]   # words agents read, and each skill's reading set, against main or base
 ```

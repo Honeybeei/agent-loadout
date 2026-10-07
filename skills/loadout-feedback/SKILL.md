@@ -20,7 +20,7 @@ This skill only writes reports. It changes no other file and fixes nothing.
   - the global prompt: `prompt/`, with the section name, such as the Collaboration section.
 
   Quote the text at fault. The path of a copy in the project may follow as a label.
-- Choose the kind: `bug` (it does something wrong), `friction` (it works, but costs effort), `unclear` (its wording led to a wrong reading), `missing` (no rule or step covers the situation), or `proposal` (an improvement without a failure).
+- Choose the kind: `bug` (it does something wrong), `friction` (it works, but costs effort), `unclear` (its wording led to a wrong reading), `missing` (no rule or step covers the situation), `unapplied` (a rule or step covers it, but the agent did not apply it), or `proposal` (an improvement without a failure). For `unapplied`, name in Area both the rule and the skill step the agent was following when the rule should have applied, and say whether that step links the rule.
 
 ## 2. Collect evidence
 
@@ -50,7 +50,7 @@ This skill only writes reports. It changes no other file and fixes nothing.
 - agent-loadout commit: <commit>, <clean or dirty>
 - Framework state: <current | outdated | not a Framework project | unknown>
 - Area: <the material's source path in agent-loadout, with its section or step>
-- Kind: <bug | friction | unclear | missing | proposal>
+- Kind: <bug | friction | unclear | missing | unapplied | proposal>
 
 ## Summary
 <Two or three lines>

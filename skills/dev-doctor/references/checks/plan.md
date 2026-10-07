@@ -1,24 +1,20 @@
 # Plan
 
-Node frontmatter, kinds and status rules, the map, and what nodes contain. Read [Plan documentation](../../../dev-framework/project/knowledge/dev-framework/plan-documentation.md) before judging or proposing a fix.
+Node frontmatter, kinds and status rules, the map, and what nodes contain.
 
 ## Script findings
 
 | Finding | Usual fix |
 | --- | --- |
-| A Plan rule violation | Correct the frontmatter, the status, or the missing section, then regenerate the map |
+| A Plan rule violation | Correct what the message names, then regenerate the map |
 | A stale map | Regenerate it |
 
-## Judgment checks
+## Judgment
 
-Unit: one node file.
+Unit: one node file, judged against [Plan documentation](../../../dev-framework/project/knowledge/dev-framework/plan-documentation.md), the document of the node's kind listed under its [Kinds](../../../dev-framework/project/knowledge/dev-framework/plan-documentation.md#kinds), and [What Knowledge holds](../../../dev-framework/project/knowledge/dev-framework/knowledge-documentation.md#what-knowledge-holds). Read with each node the Knowledge it links.
 
-| Check | Rule |
-| --- | --- |
-| The body follows its kind's template: the sections it requires, in order, and none from another kind. A collaborative body is free between Goal and Record. | The kind's document, listed under [Kinds](../../../dev-framework/project/knowledge/dev-framework/plan-documentation.md#kinds) |
-| A blackbox leaf is concrete about its output and silent about its internal structure | [Blackbox nodes](../../../dev-framework/project/knowledge/dev-framework/plan-documentation/blackbox.md) |
-| Record lines stay short and link to the owner of the detail instead of repeating it | [Recording decisions](../../../dev-framework/project/knowledge/dev-framework/plan-documentation.md#recording-decisions) |
-| A finished node holds no Knowledge content: a rule, design, or fact that stays valid after the work belongs in Knowledge, linked from the node. A running explore or collaborative leaf holds its decisions until it finishes. | [What Knowledge holds](../../../dev-framework/project/knowledge/dev-framework/knowledge-documentation.md#what-knowledge-holds) |
+- To see whether a Goal changed, compare it with the node's first committed version: `git log --format=%h -- <node> | tail -1`, then `git show <commit>:<node>`.
+- Content that belongs in Knowledge moves to the document that owns its topic, linked from the node; when no document fits, recommend one.
 
 ## Leaves in progress
 

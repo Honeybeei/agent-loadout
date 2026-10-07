@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Decide the work under one goal, or finish a goal whose work is done. Planning decides the work and makes no technical decisions; a part that lacks them gets an explore leaf. When an explore or collaborative leaf finishes, its skill follows step 2 of this procedure for the goals its results affect.
 
-The project's rules are indexed in [Dev Framework rules](../../../knowledge/dev-framework.md). Before writing to the Plan, read [Plan documentation](../../../knowledge/dev-framework/plan-documentation.md) and [Goal nodes](../../../knowledge/dev-framework/plan-documentation/goal.md), and the document of each kind you write: [Explore](../../../knowledge/dev-framework/plan-documentation/explore.md), [Collaborative](../../../knowledge/dev-framework/plan-documentation/collaborative.md), or [Blackbox](../../../knowledge/dev-framework/plan-documentation/blackbox.md) nodes. Commits follow [Git workflow](../../../knowledge/dev-framework/git-workflow.md#commits).
+The project's rules are indexed in [Dev Framework rules](../../../knowledge/dev-framework.md). Commits follow [Git workflow](../../../knowledge/dev-framework/git-workflow.md#commits).
 
 ## 1. Orient
 
@@ -20,11 +20,13 @@ The project's rules are indexed in [Dev Framework rules](../../../knowledge/dev-
 
 ## 2. Plan
 
+Before writing to the Plan, read [Plan documentation](../../../knowledge/dev-framework/plan-documentation.md) and [Goal nodes](../../../knowledge/dev-framework/plan-documentation/goal.md), and the document of each kind you write or change: [Explore](../../../knowledge/dev-framework/plan-documentation/explore.md), [Collaborative](../../../knowledge/dev-framework/plan-documentation/collaborative.md), or [Blackbox](../../../knowledge/dev-framework/plan-documentation/blackbox.md) nodes.
+
 1. **Find the parts.** Survey the goal's whole scope breadth-first before going deep on any part. Ask the user with [grilling](../grilling/SKILL.md) about scope, priorities, and order; a question about what to build or how belongs to an explore leaf, not to planning.
 2. **Find the missing decisions.** For each part, check whether Knowledge and finished explore leaves hold the decisions it needs. A part that lacks them gets an explore leaf whose Goal names what must be decided, and the part stays a goal without children that depends on it.
 3. **Split.** Split each decided part top-down and recursively into sub-goals and leaves, until every leaf meets its kind's size rule. Prefer vertical slices that end in something runnable. Create only leaves whose template can be filled now.
 4. **Choose kinds.** Recommend each leaf's kind with a one-line reason, as Goal nodes' "Choosing a leaf's kind" says. The user confirms.
-5. **Write the nodes.** Fill each node's frontmatter and its kind's template with what is known, and wire `depends_on`. For each blackbox leaf, run the readiness check from Blackbox nodes; the user approves its Output and criteria. A leaf that fails becomes collaborative, or a goal that waits for an explore leaf.
+5. **Write the nodes.** Create or change each node as the Node frame and its kind's document say, with what is known, and wire `depends_on`. For each blackbox leaf, run the readiness check from Blackbox nodes; the user approves its Output and criteria. A leaf that fails becomes collaborative, or a goal that waits for an explore leaf.
 6. **Show.** Add `Planned: <what the split produced, and why>` to the goal's Record. Regenerate the map, fix any problems it lists, and show the changed part of the tree with each leaf's kind and reason.
 7. **Commit.** Offer the commit: `plan(<goal>): plan <what was added or changed>`. When a finishing leaf called this step, its own commit carries these changes instead.
 

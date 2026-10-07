@@ -57,7 +57,7 @@ Starting an implementation leaf: set it `in_progress` on `main` and commit, then
 An implementation leaf, blackbox or collaborative, is merged the same way:
 
 1. In the main checkout on `main`, run `git merge --no-ff --no-commit impl/<node>`, and resolve any conflicts.
-2. Add the leaf's updates: ticked criteria, Record, and `done`. A collaborative leaf also applies its decisions and its planning here, as [Collaborative nodes](plan-documentation/collaborative.md#finishing) says.
+2. Add the leaf's updates: ticked criteria, Record, and `done`. A collaborative leaf also finishes its node and its planning here, as [Collaborative nodes](plan-documentation/collaborative.md#finishing) says.
 3. Run the automated checks `AGENTS.md` names. Commit as `plan(<node>): implement <title>`, or run `git merge --abort` when a check fails.
 
 - A blackbox branch must already contain the latest code on `main`; its implementation session merges `main` before reporting.

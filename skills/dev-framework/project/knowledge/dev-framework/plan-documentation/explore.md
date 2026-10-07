@@ -16,7 +16,7 @@ An explore leaf is wayfinding: it turns low-resolution ideas, concepts, flows, a
 <The destination: what must be decided, and which planning it enables>
 
 ## Notes
-- <Optional: skills to consult, standing preferences, and facts already known for this explore>
+- <Optional: skills to consult, standing preferences, and the facts or Knowledge links this leaf starts from>
 
 ## Tickets
 - [grilling] <Question for the user>
@@ -40,24 +40,11 @@ An explore leaf is wayfinding: it turns low-resolution ideas, concepts, flows, a
 - Finished: <where the decisions went>, <what planning changed>
 ```
 
-Omit a section while it is empty, except Goal and Record.
+Omit a section while it is empty, except Goal and Record. Each ticket is one line with its tag, and `(blocked by: <ticket>)` when it waits for another.
 
 ## Destination
 
 The Goal is the destination, and it fixes the scope. Name it first; every ticket serves it. An explore leaf with two unrelated destinations is two explore leaves.
-
-## Tickets
-
-Write each ticket on one line. Its tag names how it is resolved:
-
-| Tag | Resolved by |
-| --- | --- |
-| `grilling` | The user, in conversation. The agent never answers its own question. |
-| `research` | The agent investigating, often through a subagent. Raw notes stay in `.tmp/research/<topic>.md`. |
-| `prototype` | A cheap, rough artifact the user reacts to, built in `.tmp/prototypes/<name>/`, or on a `prototype/<name>` branch when it must run inside the app |
-| `task` | Work that unblocks a question rather than answering one, such as signing up for a service. The agent does it when allowed, or gives the user a precise checklist. |
-
-Add `(blocked by: <ticket>)` when a ticket waits for another.
 
 ## Fog or ticket
 
@@ -65,22 +52,20 @@ Beyond the tickets lies fog: questions you can tell are coming but cannot pin do
 
 - Make it a ticket when it can be stated precisely, even if it is blocked.
 - Put it under Not yet specified when it cannot. Do not slice fog into guessed tickets; one patch may later become several tickets, or none.
-- A question needed to reach this destination is a ticket here. A topic with its own destination goes to For the Plan and later becomes its own explore leaf.
+- A question needed to reach a leaf's destination is a ticket or fog in that leaf, whoever raises it: the leaf itself, another leaf's finishing, or planning. Scope handed to a leaf extends its Goal. A topic with its own destination goes to For the Plan and later becomes its own explore leaf.
 - Work beyond the destination goes to Out of scope. It never becomes a ticket; it returns only as a new explore leaf with a new destination.
+- Notes hold facts and standing preferences, never a question.
 
 ## While running
 
-- Leave Knowledge and other nodes unchanged; this node is the working record.
 - When a ticket is resolved, remove it from Tickets and add its line to Decisions so far at once, so a session end loses nothing.
 - When an answer makes fog specific, turn it into tickets and remove it from Not yet specified.
 - When a later decision reverses an earlier one, replace the earlier line.
 
 ## Finishing
 
-An explore leaf finishes when Tickets and Not yet specified are empty. When the user ends it earlier, move what remains to For the Plan or Out of scope first.
+An explore leaf finishes when everything its Goal names is decided and no question is left anywhere in it, so Tickets and Not yet specified are empty. When the user ends it earlier, move what remains to For the Plan or Out of scope first.
 
-1. Apply each decision to its owner, as Plan documentation's [Recording decisions](../plan-documentation.md#recording-decisions) says, and link the owner from its line. The node ends as an index of the decisions.
+1. Account for every line of the node, as Plan documentation's [Recording decisions](../plan-documentation.md#recording-decisions) says.
 2. Plan the goals the results affect, applying For the Plan, as [Goal nodes](goal.md#planning) says.
 3. Set the leaf `done` with a Finished line in Record.
-
-A `done` explore leaf has no Tickets and no Not yet specified; the map script checks this.
