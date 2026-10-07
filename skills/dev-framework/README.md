@@ -27,10 +27,12 @@ The copy step also links `.claude/skills` to `../.agents/skills` in the project.
 | Script | Runs in | Purpose |
 | --- | --- | --- |
 | [scripts/sync.ts](scripts/sync.ts) | The harness, for `dev-doctor` | Copies managed material into a project; `--check` previews |
-| [scripts/check.ts](scripts/check.ts) | The harness, for `dev-doctor` | Reports whether a project is adopted and current; with `--group`, what breaks the rules a script can check in each check group, and the units for the agent's judgment checks, or with `--changed-since` only the units changed since a commit |
+| [scripts/check.ts](scripts/check.ts) | The harness, for `dev-doctor` | Reports whether a project is adopted and current, and, with `--group`, every rule break a script can find in each group, with its fix |
+| [scripts/review.ts](scripts/review.ts) | The harness, for `dev-doctor` | Plans a defect or polish review: batches of documents of one type, each with the rule sections it is judged against and the leads scripts found, spots only judgment can settle |
+| [scripts/findings.ts](scripts/findings.ts) | The harness, for `dev-doctor` | Keeps the review findings and their status in `.tmp/doctor/findings.md` |
 | [project/.agents/skills/dev-framework/scripts/map.ts](project/.agents/skills/dev-framework/scripts/map.ts) | Each project | Checks the Plan, and generates `plan/map.md` and the browser view `.tmp/plan/map.html`; `--check` reports a stale map |
 
-A check that runs in `map.ts` catches a mistake when a node is written, because every workflow skill regenerates the map; it also blocks the map, so it belongs there only when an edit to the node can always fix it. Other checks run in `check.ts`, when `dev-doctor` runs.
+A rule that a script can test without false alarms is checked by one. A check that runs in `map.ts` catches a mistake when a node is written, because every workflow skill regenerates the map; it also blocks the map, so it belongs there only when an edit to the node can always fix it. Other checks run in `check.ts`, when `dev-doctor` runs. A pattern a script can find but only judgment can settle becomes a lead in `review.ts`.
 
 The scripts need only Bun. Their tests live in `scripts/` here, outside `project/`, so they are not copied into projects:
 

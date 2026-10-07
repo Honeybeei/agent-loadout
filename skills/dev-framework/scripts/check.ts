@@ -1,6 +1,6 @@
 // Diagnoses a project against the installed Dev Framework. It changes nothing.
-// Usage: bun check.ts [project-root] [--group <id>[,<id>...]|all [--changed-since <commit>]]
-// Add a check only when the same mistake keeps recurring; judging content stays with the agent.
+// Usage: bun check.ts [project-root] [--group <id>[,<id>...]|all]
+// Each message names the rule broken and the fix. What only judgment can settle goes to review.ts.
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -21,14 +21,16 @@ import {
 } from "node:path";
 import {
   loadPlan,
+  type PlanNode,
   renderMap,
   temporaryPaths,
 } from "../project/.agents/skills/dev-framework/scripts/map.ts";
 import { planSync } from "./sync.ts";
 
-// The check groups that dev-doctor offers, in menu order.
+// The groups that script findings are reported in, in order.
 export const GROUPS = [
   "structure",
+  "git",
   "plan",
   "knowledge",
   "ssot",
@@ -43,12 +45,20 @@ export interface Finding {
   area: Area;
   message: string;
 }
-// Independent pieces of work for each group's judgment checks, with the files each one judges.
-export interface Unit {
-  name: string;
-  files: string[];
+/** What a maintained document is, which decides the rules a review judges it against. */
+export type DocumentType =
+  | "agents"
+  | "readme"
+  | "other"
+  | "knowledge"
+  | "goal"
+  | "explore"
+  | "collaborative"
+  | "blackbox";
+export interface Document {
+  path: string;
+  type: DocumentType;
 }
-export type Units = Partial<Record<Group, Unit[]>>;
 type Add = (area: Area, message: string) => void;
 
 const REQUIRED = [
@@ -62,8 +72,18 @@ const RESERVED = ["knowledge", "plan", ".tmp", ".git", ".agents", ".claude"];
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MANAGED_DOCUMENT = /^knowledge\/dev-framework(?:\.md$|\/)/;
 // Progress wording that Knowledge must not hold.
-const BUILD_STATUS =
-  /\bnot (?:yet )?implemented\b|\bnot (?:yet built|built yet)\b|\bunimplemented\b/i;
+export const BUILD_STATUS = new RegExp(
+  [
+    String.raw`\bnot (?:yet )?(?:been )?implemented\b`,
+    String.raw`\bnot (?:yet built|built yet)\b`,
+    String.raw`\bunimplemented\b`,
+    String.raw`\bnot yet (?:been )?(?:built|added|installed|checked|verified|tested)\b`,
+    String.raw`\b(?:has|have) (?:now |already |fully )?been implemented\b`,
+    String.raw`\b(?:is|are) (?:now |already |fully )?implemented(?=\s*(?:[.,;:)]|$))`,
+    String.raw`\bimplemented as (?:a )?skeletons?\b`,
+  ].join("|"),
+  "i",
+);
 // Skills that earlier Framework versions put into projects.
 const OLD_SKILL =
   /^(?:dev-check(?:-[a-z-]+)?|dev-conformance|dev-cycle|dev-framework-report|dev-init|dev-ssot|dev-update|development-cycle|inspect-project)$/;
@@ -77,6 +97,12 @@ const isDirectory = (path: string) =>
 
 const withoutCode = (text: string) =>
   text.replace(/```[\s\S]*?```/g, "").replace(/`[^`\n]*`/g, "");
+
+/** The text with code blanked out, so line numbers stay true. */
+export const blankCode = (text: string) =>
+  text
+    .replace(/(```|~~~)[\s\S]*?\1/g, (block) => block.replace(/[^\n]/g, " "))
+    .replace(/`[^`\n]*`/g, (span) => " ".repeat(span.length));
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 
@@ -136,41 +162,151 @@ function checkWorkspaces(root: string, add: Add): string[] {
     if (workspace === ".") continue;
     const declared = list[index] as string;
     if (isAbsolute(declared) || workspace.split("/")[0] === "..") {
-      add("structure", `workspace ${declared} is outside the project`);
+      add(
+        "structure",
+        `workspace ${declared} is outside the project; correct dev.yaml`,
+      );
       continue;
     }
     if (RESERVED.includes(workspace.split("/")[0] ?? "")) {
-      add("structure", `workspace ${workspace} is inside a reserved area`);
+      add(
+        "structure",
+        `workspace ${workspace} is inside a reserved area; correct dev.yaml`,
+      );
       continue;
     }
     if (!isDirectory(join(root, workspace))) {
-      add("structure", `workspace ${workspace} does not exist`);
+      add(
+        "structure",
+        `workspace ${workspace} does not exist; correct dev.yaml, or create the directory`,
+      );
       continue;
     }
     if (!existsSync(join(root, workspace, "README.md")))
-      add("structure", `workspace ${workspace} has no README.md`);
+      add(
+        "structure",
+        `workspace ${workspace} has no README.md; add one that states its purpose and responsibilities`,
+      );
     if (
       isDirectory(join(root, workspace, "knowledge")) &&
       !existsSync(join(root, workspace, "knowledge", "README.md"))
     )
-      add("structure", `${workspace}/knowledge/ has no README.md`);
+      add(
+        "structure",
+        `${workspace}/knowledge/ has no README.md; add one that indexes its Knowledge`,
+      );
     for (const other of workspaces)
       if (other.startsWith(`${workspace}/`))
-        add("structure", `workspace ${other} is nested inside ${workspace}`);
+        add(
+          "structure",
+          `workspace ${other} is nested inside ${workspace}; correct dev.yaml`,
+        );
   }
   return workspaces;
+}
+
+/** Branches and worktrees against the node status they stand for, as git-workflow.md defines them. */
+function checkGit(
+  root: string,
+  nodes: Map<string, PlanNode> | undefined,
+  add: Add,
+): void {
+  const lines = (args: string[]) =>
+    git(root, args).stdout.split("\n").filter(Boolean);
+  const merged = (branch: string) =>
+    git(root, ["merge-base", "--is-ancestor", branch, "main"]).status === 0;
+  const branches = lines([
+    "for-each-ref",
+    "--format=%(refname:short)",
+    "refs/heads",
+  ]);
+  const worktrees = git(root, ["worktree", "list", "--porcelain"])
+    .stdout.split("\n\n")
+    .map((entry) => ({
+      path: /^worktree (.*)$/m.exec(entry)?.[1] ?? "",
+      branch: /^branch refs\/heads\/(.*)$/m.exec(entry)?.[1],
+    }))
+    .filter((worktree) => worktree.path !== "");
+  const [main, ...linked] = worktrees;
+  if (!main) return;
+  const place = (node: string) =>
+    join(dirname(main.path), `${basename(main.path)}.worktrees`, node);
+  for (const branch of branches) {
+    if (branch === "main" || branch.startsWith("prototype/")) continue;
+    const id = /^impl\/(.+)$/.exec(branch)?.[1];
+    if (id !== undefined && !nodes) continue;
+    const node = id === undefined ? undefined : nodes?.get(id);
+    const state = merged(branch)
+      ? "it is merged into main, so delete it"
+      : "it has commits main lacks; ask the user whether to merge or discard them";
+    if (id === undefined)
+      add(
+        "git",
+        `branch ${branch} is not main, impl/<node>, or prototype/<name>; ${state}`,
+      );
+    else if (!node)
+      add("git", `branch ${branch} has no node plan/nodes/${id}.md; ${state}`);
+    else if (node.kind !== "blackbox" && node.kind !== "collaborative")
+      add(
+        "git",
+        `branch ${branch} belongs to a ${node.kind} node; only implementation leaves have one; ${state}`,
+      );
+    else if (node.status !== "in_progress")
+      add(
+        "git",
+        `branch ${branch} remains while ${id} is ${node.status}; ${state}, removing its worktree first`,
+      );
+  }
+  if (!nodes) return;
+  for (const node of nodes.values()) {
+    if (node.status !== "in_progress") continue;
+    const branch = `impl/${node.id}`;
+    if (
+      (node.kind === "blackbox" || node.kind === "collaborative") &&
+      !branches.includes(branch)
+    )
+      add(
+        "git",
+        `${node.id} is an in_progress ${node.kind} leaf without ${branch}; create the branch as git-workflow.md says, or set the leaf back to todo`,
+      );
+    if (
+      node.kind === "blackbox" &&
+      branches.includes(branch) &&
+      !linked.some((w) => w.branch === branch && w.path === place(node.id))
+    )
+      add(
+        "git",
+        `${node.id}: ${branch} is not checked out at ${place(node.id)}, where git-workflow.md puts a blackbox leaf's worktree`,
+      );
+  }
+  for (const worktree of linked) {
+    const id = /^impl\/(.+)$/.exec(worktree.branch ?? "")?.[1];
+    const node = id === undefined ? undefined : nodes.get(id);
+    if (worktree.branch?.startsWith("prototype/")) continue;
+    if (node?.kind !== "blackbox" || node.status !== "in_progress")
+      add(
+        "git",
+        `worktree ${worktree.path} holds ${worktree.branch ?? "a detached HEAD"}, which no in_progress blackbox leaf owns; remove it once the user confirms its session is closed and its work is preserved`,
+      );
+  }
 }
 
 function checkKnowledge(root: string, path: string, add: Add): void {
   const file = join(root, path);
   const { fields, body } = splitFrontmatter(readFileSync(file, "utf8"));
   if (!KEBAB.test(basename(file, ".md")))
-    add("knowledge", `${path}: file name must be kebab-case`);
+    add(
+      "knowledge",
+      `${path}: file name must be kebab-case; rename it, and update its incoming links and subdocs entries`,
+    );
   const titles = withoutCode(body)
     .split("\n")
     .filter((line) => line.startsWith("# ")).length;
   if (titles !== 1)
-    add("knowledge", `${path}: needs exactly one H1 heading, has ${titles}`);
+    add(
+      "knowledge",
+      `${path}: needs exactly one H1 heading, has ${titles}; keep one title, and demote the other headings`,
+    );
   const topics = fields?.canonical_for;
   if (
     !Array.isArray(topics) ||
@@ -179,7 +315,7 @@ function checkKnowledge(root: string, path: string, add: Add): void {
   )
     add(
       "knowledge",
-      `${path}: frontmatter needs canonical_for, a nonempty list of topics`,
+      `${path}: frontmatter needs canonical_for, a nonempty list of topics; list the topics the document owns`,
     );
   const subdocs = fields?.subdocs ?? [];
   if (
@@ -192,7 +328,10 @@ function checkKnowledge(root: string, path: string, add: Add): void {
   const listed = new Set(subdocs.map((doc) => resolve(dirname(file), doc)));
   for (const doc of subdocs)
     if (!existsSync(resolve(dirname(file), doc)))
-      add("knowledge", `${path}: subdocs lists ${doc}, which does not exist`);
+      add(
+        "knowledge",
+        `${path}: subdocs lists ${doc}, which does not exist; correct or remove the entry`,
+      );
   const children = join(dirname(file), basename(file, ".md"));
   if (isDirectory(children))
     for (const child of readdirSync(children).sort())
@@ -203,12 +342,12 @@ function checkKnowledge(root: string, path: string, add: Add): void {
       )
         add(
           "knowledge",
-          `${path}: subdocs does not list ./${basename(children)}/${child}`,
+          `${path}: subdocs does not list ./${basename(children)}/${child}; add it`,
         );
 }
 
 /** Maps each topic, compared without case, to its name and the documents that own it. */
-function topicOwners(
+export function topicOwners(
   root: string,
   documents: string[],
 ): Map<string, { topic: string; owners: string[] }> {
@@ -400,7 +539,7 @@ export function hardWraps(text: string): number[] {
 export function diagnose(projectRoot: string): {
   state: State;
   findings: Finding[];
-  units: Units;
+  documents: Document[];
 } {
   const root = realpathSync(projectRoot);
   const findings: Finding[] = [];
@@ -420,20 +559,30 @@ export function diagnose(projectRoot: string): {
   if (lstatSync(join(root, "CLAUDE.md"), { throwIfNoEntry: false }))
     add(
       "structure",
-      "CLAUDE.md exists; AGENTS.md is the only instruction file",
+      "CLAUDE.md exists; AGENTS.md is the only instruction file; move its rules into AGENTS.md, outside the managed section, then delete it",
     );
   for (const path of markdown) {
     if (basename(path) === "AGENTS.md" && path !== "AGENTS.md")
-      add("structure", `${path}: AGENTS.md belongs only at the project root`);
+      add(
+        "structure",
+        `${path}: AGENTS.md belongs only at the project root; move its rules into the root AGENTS.md, outside the managed section, then delete it`,
+      );
     if (basename(path) === "CLAUDE.md" && path !== "CLAUDE.md")
-      add("structure", `${path}: AGENTS.md is the only instruction file`);
+      add(
+        "structure",
+        `${path}: AGENTS.md is the only instruction file; move its rules into the root AGENTS.md, outside the managed section, then delete it`,
+      );
   }
   const sync = planSync(root);
   for (const problem of sync.problems)
     add("managed", `blocks sync: ${problem}`);
-  if (!exists("dev.yaml")) return { state: "not adopted", findings, units: {} };
+  if (!exists("dev.yaml"))
+    return { state: "not adopted", findings, documents: [] };
   for (const change of sync.changes)
-    add("managed", `sync would ${change.action} ${change.path}`);
+    add(
+      "managed",
+      `sync would ${change.action} ${change.path}${change.note ? `: ${change.note}` : ""}`,
+    );
   if (
     lstatSync(join(root, ".claude/skills"), { throwIfNoEntry: false }) &&
     git(root, ["ls-files", "--", ".claude/skills"]).stdout === ""
@@ -446,18 +595,29 @@ export function diagnose(projectRoot: string): {
 
   // Structure
   for (const path of REQUIRED)
-    if (!exists(path)) add("structure", `${path} is missing`);
+    if (!exists(path))
+      add(
+        "structure",
+        path === "plan/map.md"
+          ? "plan/map.md is missing; generate it with the map script"
+          : `${path} is missing; create it as dev-doctor's Adopt describes`,
+      );
   if (
     !git(root, ["check-ignore", "-v", ".tmp/probe"]).stdout.startsWith(
       ".gitignore:",
     )
   )
-    add("structure", "the root .gitignore must exclude /.tmp/");
+    add(
+      "structure",
+      "the root .gitignore must exclude /.tmp/; add a /.tmp/ line",
+    );
   const workspaces = checkWorkspaces(root, add);
 
   // Plan
   const plan = loadPlan(root);
   for (const error of plan.errors) add("plan", error);
+  // Nodes that failed to load would make their branches look orphaned.
+  checkGit(root, plan.errors.length > 0 ? undefined : plan.nodes, add);
   if (
     plan.errors.length === 0 &&
     exists("plan/map.md") &&
@@ -482,18 +642,27 @@ export function diagnose(projectRoot: string): {
     if (owners.length > 1)
       add(
         "ssot",
-        `"${topic}" is in canonical_for of ${owners.join(" and ")}; give it one owner`,
+        owners.some((o) => MANAGED_DOCUMENT.test(o))
+          ? `"${topic}" is in canonical_for of ${owners.join(" and ")}; the Framework owns it, so remove the restated rule, link to the Framework's, and keep only project-specific rules, under a topic the Framework does not own`
+          : `"${topic}" is in canonical_for of ${owners.join(" and ")}; give it one owner, which keeps the detail, and leave a short summary with a link in the other`,
       );
-  for (const path of knowledge) {
+  const indexes = markdown.filter(
+    (path) =>
+      basename(path) === "README.md" &&
+      knowledgeDirectories.some((d) => path.startsWith(`${d}/`)),
+  );
+  for (const path of [...knowledge, ...indexes]) {
     if (MANAGED_DOCUMENT.test(path)) continue;
-    const status = BUILD_STATUS.exec(
-      withoutCode(readFileSync(join(root, path), "utf8")),
-    )?.[0];
-    if (status)
-      add(
-        "ssot",
-        `${path}: says "${status}"; Knowledge never states how far something is built, since the Plan and the code say that`,
-      );
+    blankCode(readFileSync(join(root, path), "utf8"))
+      .split("\n")
+      .forEach((line, index) => {
+        const status = BUILD_STATUS.exec(line)?.[0];
+        if (status)
+          add(
+            "ssot",
+            `${path}:${index + 1}: says "${status}"; Knowledge never states how far something is built, since the Plan and the code say that; keep the design and drop the status`,
+          );
+      });
   }
 
   // Links
@@ -509,7 +678,10 @@ export function diagnose(projectRoot: string): {
       // Reported below as a .tmp/ path, or by the Plan checks for a node.
       if (inTemporary && inKnowledgeOrPlan(path)) continue;
       if (!existsSync(resolved))
-        add("links", `${path}: broken link to ${target}`);
+        add(
+          "links",
+          `${path}: broken link to ${target}; point it to the current path, or remove it when the target is gone for good`,
+        );
       else if (fragment !== undefined && resolved.endsWith(".md")) {
         const found =
           anchorsOf.get(resolved) ?? anchors(readFileSync(resolved, "utf8"));
@@ -517,7 +689,7 @@ export function diagnose(projectRoot: string): {
         if (!found.has(fragment))
           add(
             "links",
-            `${path}: broken link to ${target}, which matches no heading`,
+            `${path}: broken link to ${target}, which matches no heading; point it to an existing heading`,
           );
       }
     }
@@ -536,6 +708,42 @@ export function diagnose(projectRoot: string): {
           `${path}: names ${named.join(", ")} in .tmp/, which may be deleted; move what it needs into the document, and remove the path`,
         );
     }
+  // The links each entry point owes, as the README and AGENTS guideline's Responsibilities say.
+  const owed: [string, string[]][] = [
+    [
+      "README.md",
+      [
+        "AGENTS.md",
+        "knowledge/README.md",
+        "plan/README.md",
+        ...workspaces.filter((w) => w !== ".").map((w) => `${w}/README.md`),
+      ],
+    ],
+    ["plan/README.md", ["plan/map.md"]],
+    ...workspaces
+      .filter((w) => w !== "." && exists(`${w}/knowledge/README.md`))
+      .map((w): [string, string[]] => [
+        `${w}/README.md`,
+        [`${w}/knowledge/README.md`],
+      ]),
+  ];
+  for (const [from, targets] of owed) {
+    if (!exists(from)) continue;
+    const reached = new Set(
+      relativeLinks(root, from).map(({ resolved }) =>
+        relative(
+          root,
+          isDirectory(resolved) ? join(resolved, "README.md") : resolved,
+        ),
+      ),
+    );
+    for (const target of targets)
+      if (exists(target) && !reached.has(target))
+        add(
+          "links",
+          `${from}: link to ${target}, as the Responsibilities in knowledge/dev-framework/readme-agents-guideline.md require`,
+        );
+  }
   const linked = reachable(root);
   const navigable = (path: string) =>
     path === "AGENTS.md" ||
@@ -547,7 +755,7 @@ export function diagnose(projectRoot: string): {
     if (navigable(path) && !MANAGED_DOCUMENT.test(path) && !linked.has(path))
       add(
         "links",
-        `${path}: not reachable from the root README through links or subdocs`,
+        `${path}: not reachable from the root README through links or subdocs; link it from the index of its area: a README, knowledge/README.md, or its parent's subdocs`,
       );
 
   // Writing: documents the project maintains, without managed and generated ones.
@@ -562,70 +770,39 @@ export function diagnose(projectRoot: string): {
     if (lines.length > 0)
       add(
         "writing",
-        `${path}: hard-wrapped prose at line ${lines.slice(0, 5).join(", ")}${lines.length > 5 ? `, and ${lines.length - 5} more` : ""}`,
+        `${path}: hard-wrapped prose at line ${lines.slice(0, 5).join(", ")}${lines.length > 5 ? `, and ${lines.length - 5} more` : ""}; join each paragraph or list item onto one line`,
       );
   }
 
   // Leftovers
   if (exists("plan/map.yaml"))
-    add("leftovers", "plan/map.yaml is from an earlier Framework");
+    add(
+      "leftovers",
+      "plan/map.yaml is from an earlier Framework; move what the project still needs into the Plan, Knowledge, or AGENTS.md, then delete it",
+    );
   if (isDirectory(join(root, ".agents/skills")))
     for (const name of readdirSync(join(root, ".agents/skills")).sort())
       if (OLD_SKILL.test(name))
-        add("leftovers", `.agents/skills/${name} is from an earlier Framework`);
+        add(
+          "leftovers",
+          `.agents/skills/${name} is from an earlier Framework; move what the project still needs into the Plan, Knowledge, or AGENTS.md, then delete it`,
+        );
 
-  const file = (path: string): Unit => ({ name: path, files: [path] });
-  // The project rules in the root AGENTS.md, outside the managed section.
-  const agents = exists("AGENTS.md") ? [file("AGENTS.md")] : [];
-  const units: Units = {
-    structure: agents,
-    plan: documents
-      .filter((path) => /^plan\/nodes\/[^/]+\.md$/.test(path))
-      .map(file),
-    ssot: [
-      ...topics
-        .filter(({ owners }) => owners.some((o) => !MANAGED_DOCUMENT.test(o)))
-        .map(({ topic, owners }) => ({
-          name: `${topic}: ${owners.join(", ")}`,
-          files: owners,
-        })),
-      ...agents,
-    ],
-    links: documents.map(file),
-    writing: documents.map(file),
+  const typeOf = (path: string): DocumentType => {
+    const node = /^plan\/nodes\/([^/]+)\.md$/.exec(path)?.[1];
+    if (node !== undefined) return plan.nodes.get(node)?.kind ?? "other";
+    if (path === "AGENTS.md") return "agents";
+    if (basename(path) === "README.md") return "readme";
+    return knowledge.includes(path) ? "knowledge" : "other";
   };
-  return { state, findings, units };
+  return {
+    state,
+    findings,
+    documents: documents.map((path) => ({ path, type: typeOf(path) })),
+  };
 }
 
-/**
- * The files that differ from a commit, uncommitted and untracked ones included,
- * or undefined when the Framework rules changed since, so that every unit needs judging again.
- */
-export function changedSince(
-  projectRoot: string,
-  commit: string,
-): Set<string> | undefined {
-  const root = realpathSync(projectRoot);
-  const rules = git(root, [
-    "diff",
-    "--name-only",
-    commit,
-    "--",
-    "knowledge/dev-framework.md",
-    "knowledge/dev-framework",
-  ]).stdout;
-  if (rules.trim() !== "") return undefined;
-  const files = [
-    ...git(root, ["diff", "--name-only", "-z", commit]).stdout.split("\0"),
-    ...git(root, ["ls-files", "-o", "--exclude-standard", "-z"]).stdout.split(
-      "\0",
-    ),
-  ];
-  return new Set(files.filter((path) => path !== ""));
-}
-
-const USAGE =
-  "Usage: bun check.ts [project-root] [--group <id>[,<id>...]|all [--changed-since <commit>]]";
+const USAGE = "Usage: bun check.ts [project-root] [--group <id>[,<id>...]|all]";
 
 function print(title: string, lines: string[]): void {
   console.log(`\n${title}\n${lines.map((line) => `- ${line}`).join("\n")}`);
@@ -633,33 +810,22 @@ function print(title: string, lines: string[]): void {
 
 if (import.meta.main) {
   const args = process.argv.slice(2);
-  const options = new Map<string, string>();
-  const positional: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i] ?? "";
-    if (arg === "--group" || arg === "--changed-since")
-      options.set(arg, args[++i] ?? "");
-    else positional.push(arg);
-  }
-  const groupArgument = options.get("--group");
-  const since = options.get("--changed-since");
+  const at = args.indexOf("--group");
+  const groupArgument = at < 0 ? undefined : (args[at + 1] ?? "");
+  const positional =
+    at < 0 ? args : [...args.slice(0, at), ...args.slice(at + 2)];
   const selected =
     groupArgument === "all" ? [...GROUPS] : groupArgument?.split(",");
-  const root = resolve(positional[0] ?? ".");
   if (
     positional.length > 1 ||
     positional.some((arg) => arg.startsWith("--")) ||
-    selected?.some((id) => !(GROUPS as readonly string[]).includes(id)) ||
-    (since !== undefined &&
-      (selected === undefined ||
-        git(root, ["rev-parse", "--verify", "--quiet", `${since}^{commit}`])
-          .status !== 0))
+    selected?.some((id) => !(GROUPS as readonly string[]).includes(id))
   ) {
     console.error(`${USAGE}\nGroups: ${GROUPS.join(", ")}`);
     process.exit(2);
   }
-  const changed = since === undefined ? undefined : changedSince(root, since);
-  const { state, findings, units } = diagnose(root);
+  const root = resolve(positional[0] ?? ".");
+  const { state, findings } = diagnose(root);
   const messages = (area: Area) =>
     findings.filter((f) => f.area === area).map((f) => f.message);
   console.log(`State: ${state}`);
@@ -683,20 +849,6 @@ if (import.meta.main) {
     const found = messages(group);
     console.log(`\n${group}: ${found.length} findings`);
     for (const message of found) console.log(`- ${message}`);
-    const list = units[group];
-    if (list === undefined) continue;
-    const shown =
-      changed === undefined
-        ? list
-        : list.filter((unit) => unit.files.some((path) => changed.has(path)));
-    const scope =
-      since === undefined
-        ? ""
-        : changed === undefined
-          ? `, all because the Framework rules changed since ${since}`
-          : ` of ${list.length}, changed since ${since}`;
-    console.log(`Judgment units: ${shown.length}${scope}`);
-    for (const unit of shown) console.log(`- ${unit.name}`);
   }
   process.exit(
     findings.some((f) => (selected as string[]).includes(f.area)) ? 1 : 0,

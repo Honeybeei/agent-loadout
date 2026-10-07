@@ -139,6 +139,20 @@ describe("sync", () => {
     expect(read(root, ".agents/skills/grilling/SKILL.md")).not.toBe("edited\n");
   });
 
+  test("warns before replacing a directory no earlier sync wrote", () => {
+    const root = repository({ ".agents/skills/research/SKILL.md": "mine\n" });
+    expect(sync(root, "--check").out).toContain(
+      "would replace .agents/skills/research: no earlier sync wrote it",
+    );
+    sync(root);
+    commit(root);
+    write(root, { ".agents/skills/research/SKILL.md": "edited\n" });
+    commit(root);
+    expect(sync(root, "--check").out).toContain(
+      "would replace .agents/skills/research\n",
+    );
+  });
+
   test("removes material that the Framework no longer manages", () => {
     const root = repository();
     sync(root);

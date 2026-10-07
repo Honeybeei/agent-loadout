@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import {
   loadPlan,
   renderMap,
@@ -40,7 +40,7 @@ function git(root: string, ...args: string[]) {
 function repository(files: Record<string, string> = {}): string {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "dev-check-")));
   roots.push(root);
-  git(root, "init", "-q");
+  git(root, "init", "-q", "-b", "main");
   git(root, "config", "user.name", "Test");
   git(root, "config", "user.email", "test@example.com");
   write(root, { ".gitignore": "/.tmp/\n", ...files });
@@ -53,7 +53,7 @@ const node = (
   kind: string,
   status: string,
 ) =>
-  `---\ntitle: ${id}\nparent: ${parent}\ndepends_on: []\nkind: ${kind}\nstatus: ${status}\n---\n\n# ${id}\n\n## Goal\nA goal.\n`;
+  `---\ntitle: ${id}\nparent: ${parent}\ndepends_on: []\nkind: ${kind}\nstatus: ${status}\n---\n\n# ${id}\n\n## Goal\nA goal.\n${kind === "goal" ? "" : "\n## Record\n"}`;
 
 const doc = (title: string, fields = "") =>
   `---\ncanonical_for:\n  - ${title}\n${fields}---\n\n# ${title}\n`;
@@ -86,7 +86,7 @@ describe("state", () => {
     expect(diagnose(repository({ "README.md": "# Project\n" }))).toEqual({
       state: "not adopted",
       findings: [],
-      units: {},
+      documents: [],
     });
   });
 
@@ -250,7 +250,7 @@ describe("findings", () => {
         "knowledge/chat.md": `${doc("Chat")}\nChat streams answers. Not yet implemented.\n`,
       },
       "ssot",
-      'knowledge/chat.md: says "Not yet implemented"; Knowledge never states how far something is built',
+      'knowledge/chat.md:8: says "Not yet implemented"; Knowledge never states how far something is built',
     ],
     [
       "a topic that a Framework document owns",
@@ -333,6 +333,118 @@ describe("findings", () => {
     const root = project();
     rmSync(join(root, "plan/README.md"));
     expect(messages(root, "structure")).toContain("plan/README.md is missing");
+  });
+});
+
+test("reports every build-status line in Knowledge and its indexes, and spares design prose and code", () => {
+  const root = project();
+  write(root, {
+    "knowledge/README.md":
+      "# Knowledge\n\nRead [Chat](chat.md) before changing chat; it labels the parts not yet built.\n",
+    "knowledge/chat.md": `${doc("Chat")}\nThese decisions are implemented.\n\nStreaming has been implemented.\n\nThe parser is implemented as a state machine. The \`not implemented\` error stays.\n`,
+  });
+  expect(messages(root, "ssot").split("\n")).toEqual([
+    'knowledge/chat.md:8: says "are implemented"; Knowledge never states how far something is built, since the Plan and the code say that; keep the design and drop the status',
+    'knowledge/chat.md:10: says "has been implemented"; Knowledge never states how far something is built, since the Plan and the code say that; keep the design and drop the status',
+    'knowledge/README.md:3: says "not yet built"; Knowledge never states how far something is built, since the Plan and the code say that; keep the design and drop the status',
+  ]);
+});
+
+describe("branches and worktrees", () => {
+  /** A project with one leaf of the given kind and status, committed. */
+  function withLeaf(kind: string, status: string): string {
+    const root = project();
+    write(root, {
+      "plan/nodes/leaf.md": `${node("leaf", "root", kind, status).replace(/\n## Record\n$/, "")}\n## Output\nA page.\n\n## Completion criteria\n- [x] It loads.\n\n## Verification\n- Open it.\n\n## Record\n- Implemented: the page.\n`,
+    });
+    write(root, { "plan/map.md": renderMap(loadPlan(root)) });
+    git(root, "add", "-A");
+    git(root, "commit", "-q", "-m", "Add a leaf");
+    return root;
+  }
+  const worktree = (root: string) =>
+    join(dirname(root), `${basename(root)}.worktrees`, "leaf");
+  afterEach(() => {
+    for (const root of roots)
+      rmSync(`${root}.worktrees`, { recursive: true, force: true });
+  });
+
+  test("a dispatched blackbox leaf with its branch and worktree passes", () => {
+    const root = withLeaf("blackbox", "in_progress");
+    git(
+      root,
+      "worktree",
+      "add",
+      "-q",
+      "-b",
+      "impl/leaf",
+      worktree(root),
+      "main",
+    );
+    expect(messages(root, "git")).toBe("");
+  });
+
+  test("an open collaborative leaf on its branch passes", () => {
+    const root = withLeaf("collaborative", "in_progress");
+    git(root, "branch", "impl/leaf");
+    expect(messages(root, "git")).toBe("");
+  });
+
+  test("reports a running leaf without its branch, or a blackbox branch outside its worktree", () => {
+    const root = withLeaf("blackbox", "in_progress");
+    expect(messages(root, "git")).toContain(
+      "leaf is an in_progress blackbox leaf without impl/leaf",
+    );
+    git(root, "branch", "impl/leaf");
+    expect(messages(root, "git")).toContain(
+      "leaf: impl/leaf is not checked out at",
+    );
+  });
+
+  test("reports a branch the Framework does not use, and whether it is merged", () => {
+    const root = withLeaf("blackbox", "todo");
+    git(root, "branch", "parked/idea");
+    expect(messages(root, "git")).toContain(
+      "branch parked/idea is not main, impl/<node>, or prototype/<name>; it is merged into main, so delete it",
+    );
+  });
+
+  test("reports a branch and a worktree left after the leaf finished", () => {
+    const root = withLeaf("blackbox", "done");
+    git(
+      root,
+      "worktree",
+      "add",
+      "-q",
+      "-b",
+      "impl/leaf",
+      worktree(root),
+      "main",
+    );
+    write(worktree(root), { "code.ts": "x\n" });
+    git(worktree(root), "add", "-A");
+    git(worktree(root), "commit", "-q", "-m", "Work");
+    const found = messages(root, "git");
+    expect(found).toContain(
+      "branch impl/leaf remains while leaf is done; it has commits main lacks",
+    );
+    expect(found).toContain("which no in_progress blackbox leaf owns");
+  });
+
+  test("spares impl branches while the Plan has errors, since their nodes may not have loaded", () => {
+    const root = project();
+    git(root, "branch", "impl/old-node");
+    git(root, "branch", "parked/idea");
+    write(root, { "plan/nodes/broken.md": "no frontmatter\n" });
+    const found = messages(root, "git");
+    expect(found).not.toContain("impl/old-node");
+    expect(found).toContain("branch parked/idea");
+  });
+
+  test("prototype branches pass", () => {
+    const root = project();
+    git(root, "branch", "prototype/sketch");
+    expect(messages(root, "git")).toBe("");
   });
 });
 
@@ -427,18 +539,26 @@ describe("hard wraps", () => {
   });
 });
 
-test("judgment units list nodes, topics, maintained documents, and AGENTS.md", () => {
+test("each maintained document has a type; managed and generated ones are left out", () => {
   const root = project();
-  write(root, { "knowledge/topic.md": doc("Topic") });
-  const { units } = diagnose(root);
-  const names = (group: keyof typeof units) =>
-    units[group]?.map((unit) => unit.name);
-  expect(names("structure")).toEqual(["AGENTS.md"]);
-  expect(names("plan")).toEqual(["plan/nodes/root.md"]);
-  expect(names("ssot")).toEqual(["Topic: knowledge/topic.md", "AGENTS.md"]);
-  expect(names("writing")).toContain("knowledge/topic.md");
-  expect(names("writing")).not.toContain("plan/map.md");
-  expect(names("writing")).not.toContain("knowledge/dev-framework.md");
+  write(root, {
+    "knowledge/topic.md": doc("Topic"),
+    "docs/guide.md": "# Guide\n",
+    "plan/nodes/leaf.md": node("leaf", "root", "explore", "todo"),
+  });
+  const types = Object.fromEntries(
+    diagnose(root).documents.map((d) => [d.path, d.type]),
+  );
+  expect(types).toEqual({
+    "AGENTS.md": "agents",
+    "README.md": "readme",
+    "docs/guide.md": "other",
+    "knowledge/README.md": "readme",
+    "knowledge/topic.md": "knowledge",
+    "plan/README.md": "readme",
+    "plan/nodes/leaf.md": "explore",
+    "plan/nodes/root.md": "goal",
+  });
 });
 
 describe("CLI", () => {
@@ -448,7 +568,7 @@ describe("CLI", () => {
     const current = run(project());
     expect(current.exitCode).toBe(0);
     expect(current.stdout.toString()).toBe(
-      "State: current\n\nGroups\n- structure: 0\n- plan: 0\n- knowledge: 0\n- ssot: 0\n- links: 0\n- writing: 0\n- leftovers: 0\n",
+      "State: current\n\nGroups\n- structure: 0\n- git: 0\n- plan: 0\n- knowledge: 0\n- ssot: 0\n- links: 0\n- writing: 0\n- leftovers: 0\n",
     );
     const bare = run(repository());
     expect(bare.exitCode).toBe(1);
@@ -464,70 +584,20 @@ describe("CLI", () => {
     expect(out).not.toContain("Groups");
   });
 
-  test("--group prints the findings and judgment units of the groups", () => {
+  test("--group prints the findings of the groups", () => {
     const root = project();
     write(root, { "docs/guide.md": "# Guide\n\nOne\ntwo\n" });
     const result = run(root, "--group", "plan,writing");
     expect(result.exitCode).toBe(1);
     const out = result.stdout.toString();
+    expect(out).toContain("plan: 0 findings\n");
     expect(out).toContain(
-      "plan: 0 findings\nJudgment units: 1\n- plan/nodes/root.md\n",
-    );
-    expect(out).toContain(
-      "writing: 1 findings\n- docs/guide.md: hard-wrapped prose at line 3\n",
+      "writing: 1 findings\n- docs/guide.md: hard-wrapped prose at line 3; join each paragraph or list item onto one line\n",
     );
     expect(run(root, "--group", "structure").exitCode).toBe(0);
   });
 
   test("rejects an unknown group", () => {
     expect(run(project(), "--group", "style").exitCode).toBe(2);
-  });
-
-  test("--changed-since lists only the units changed since the commit, uncommitted and untracked ones included", () => {
-    const root = project();
-    write(root, {
-      "knowledge/README.md": "# Knowledge\n\nRead [the topic](topic.md).\n",
-      "knowledge/topic.md": doc("Topic"),
-    });
-    git(root, "add", "-A");
-    git(root, "commit", "-q", "-m", "Add a topic");
-    write(root, {
-      "knowledge/topic.md": `${doc("Topic")}\nChanged.\n`,
-      "docs/new.md": "# New\n",
-    });
-    const out = run(
-      root,
-      "--group",
-      "ssot,writing",
-      "--changed-since",
-      "HEAD",
-    ).stdout.toString();
-    expect(out).toContain(
-      "Judgment units: 1 of 2, changed since HEAD\n- Topic: knowledge/topic.md\n",
-    );
-    expect(out).toContain(
-      "Judgment units: 2 of 7, changed since HEAD\n- docs/new.md\n- knowledge/topic.md\n",
-    );
-  });
-
-  test("--changed-since lists every unit when the Framework rules changed", () => {
-    const root = project();
-    write(root, {
-      "knowledge/dev-framework/writing-rules.md":
-        "---\nmanaged_by: dev-framework\n---\n\n# Edited\n",
-    });
-    expect(
-      run(root, "--group", "plan", "--changed-since", "HEAD").stdout.toString(),
-    ).toContain(
-      "Judgment units: 1, all because the Framework rules changed since HEAD\n",
-    );
-  });
-
-  test("--changed-since needs --group and a known commit", () => {
-    const root = project();
-    expect(run(root, "--changed-since", "HEAD").exitCode).toBe(2);
-    expect(
-      run(root, "--group", "plan", "--changed-since", "nope").exitCode,
-    ).toBe(2);
   });
 });
