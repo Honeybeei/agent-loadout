@@ -162,6 +162,6 @@ if (import.meta.main) {
     ]);
   }
   console.log(
-    `Words agents read, without frontmatter, against ${base}\n\n${table(rows)}\n\nEach skill with the documents it links\n\n${table(sets)}`,
+    `Words agents read, without frontmatter, against ${base}\n\n${table(rows)}\n\nEach skill with the documents it links directly; documents those link are not counted\n\n${table(sets)}`,
   );
 }

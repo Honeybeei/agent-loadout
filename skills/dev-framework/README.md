@@ -32,7 +32,7 @@ The copy step also links `.claude/skills` to `../.agents/skills` in the project.
 
 A check that runs in `map.ts` catches a mistake when a node is written, because every workflow skill regenerates the map; it also blocks the map, so it belongs there only when an edit to the node can always fix it. Other checks run in `check.ts`, when `dev-doctor` runs.
 
-They need only Bun. Their tests live in `scripts/` here, outside `project/`, so they are not copied into projects:
+The scripts need only Bun. Their tests live in `scripts/` here, outside `project/`, so they are not copied into projects:
 
 ```bash
 bun test skills/dev-framework/scripts

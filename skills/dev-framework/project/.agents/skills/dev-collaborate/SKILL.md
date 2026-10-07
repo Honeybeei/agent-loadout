@@ -29,7 +29,7 @@ The project's rules are indexed in [Dev Framework rules](../../../knowledge/dev-
 - Agree with the user on how this session works: the agent builds and the user reviews each slice, or the user writes and the agent reviews.
 - Work slice by slice: propose a thin vertical slice, build it or let the user build it, where the project has tests write a failing test first, then show the diff and the check results and wait for the user. Commit each slice the user approves, asking together with the slice review.
 - Resolve a question the leaf needs in place, as an explore leaf resolves a ticket: [grilling](../grilling/SKILL.md), [research](../research/SKILL.md), [prototype](../prototype/SKILL.md), or a task. Write the decision into the node at once, and follow it.
-- Write a topic with its own destination into the node for planning. Leave Knowledge and other nodes unchanged until step 4.
+- Write a topic with its own destination into the node for planning.
 - Name things with the glossary's terms.
 - To review or dispatch a blackbox leaf meanwhile, pause at a slice boundary: commit the slice, run `git switch main`, follow that skill, then run `git switch impl/<node>`. Other explore and collaborative leaves wait until this one merges.
 
@@ -40,7 +40,7 @@ When the user says the work is done:
 1. **Verify.** Run the checks the node names and the checks `AGENTS.md` names, and show the results.
 2. **Show the changes.** List every line of the node with where it goes, as Plan documentation's [Recording decisions](../../../knowledge/dev-framework/plan-documentation.md#recording-decisions) says; the planning it calls for; and the node updates. Ask once for the merge, including deleting the branch.
 3. **Merge.** Commit any finished work, run `git switch main`, then `git merge --no-ff --no-commit impl/<node>`, and resolve conflicts.
-4. **Apply.** Move each line as listed, leaving its gist and a link to its owner. Follow [dev-plan](../dev-plan/SKILL.md) step 2 for the goals the results affect. Set the leaf `done`, add `Implemented: <what was built, linking the Knowledge it implements>, <evidence>` to Record, and regenerate the map.
+4. **Apply.** Move each line as listed. A node you change follows its [Node frame](../../../knowledge/dev-framework/plan-documentation.md#node-frame) and kind document. Follow [dev-plan](../dev-plan/SKILL.md) step 2 for the goals the results affect. Set the leaf `done`, add its Implemented line to Record, as the [template](../../../knowledge/dev-framework/plan-documentation/collaborative.md#template) gives it, and regenerate the map.
 5. **Check and commit.** Run the automated checks `AGENTS.md` names. When one fails, run `git merge --abort`, switch back to `impl/<node>`, and fix it there. Otherwise, commit the merge as `plan(<node>): implement <title>`. When it changes a Knowledge document that an `in_progress` blackbox leaf relies on, name those leaves in the same prompt and recommend no effect, notify, or recall for each, as Development workflow's [Changing Knowledge while blackbox leaves run](../../../knowledge/dev-framework/workflow.md#changing-knowledge-while-blackbox-leaves-run) says.
 6. **Clean up.** Run `git branch -d impl/<node>`.
 

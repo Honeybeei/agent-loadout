@@ -41,7 +41,7 @@ A group is settled when its cause, its fix, and the files to change are agreed. 
 1. On `main`, create `work/<short-purpose>` before the first edit.
 2. Make the agreed changes, one group at a time, following this repository's AGENTS.md: update the README and every link a change affects, and keep skills harness-neutral.
 3. Run `bun run lint`, `bun run typecheck`, and `bun run test`, and fix the failures the change caused.
-4. Show the result per group: the files changed, the net word count from `bun run size`, and the check results.
+4. Show the result per group: the files changed, the size report [Keeping rules small](../../../AGENTS.md#keeping-rules-small) asks for, and the check results.
 
 ## 5. Publish
 

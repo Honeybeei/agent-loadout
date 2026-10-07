@@ -105,7 +105,7 @@ export function temporaryPaths(text: string): string[] {
     ),
   ].map((match) => match[0].replace(/[.:]+$/, ""));
   return [...new Set(paths)].filter(
-    (path) => !/^(?:\.{1,2}\/)*\/?\.tmp\/plan\//.test(path),
+    (path) => !/^(?:\.{1,2}\/)*\/?\.tmp\/(?:plan\/|$)/.test(path),
   );
 }
 

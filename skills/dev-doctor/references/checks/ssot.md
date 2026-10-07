@@ -8,7 +8,7 @@ Each topic has one detailed owner, and Knowledge and Plan hold only their own co
 | --- | --- |
 | A topic in `canonical_for` of two project documents | Recommend one owner. Move the detail there, and leave a short summary with a link in the other document. |
 | A topic that a Framework document also owns | Remove the restated Framework rule and link to it. Keep only project-specific rules, under a topic the Framework does not own. |
-| Knowledge that says what is not built yet | Remove the build status and keep the design; a sentence about the product's own behavior is reworded so it reads as such |
+| Knowledge that says what is not built yet | Remove the build status and keep the design. Text the product itself shows, such as an error message, goes in a code span, which the check skips. |
 
 ## Judgment
 

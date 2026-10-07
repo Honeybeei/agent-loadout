@@ -24,12 +24,12 @@ Classify content by the question it answers:
 
 For example, "exports must preserve all user data" is Knowledge; "implement export, then test recovery" is Plan, even when approved.
 
-- State what must hold, not what is built; whether a design is built is read from the Plan and the code.
+- State requirements, rules, designs, and facts, never how far they are built; the Plan and the code say that.
 - Keep proposals under consideration out of Knowledge until they are approved.
 - Give each topic one detailed owner. Other documents may summarize it briefly and link to it.
 - Put project-wide and cross-workspace Knowledge in root `knowledge/`, and workspace-specific Knowledge in that workspace's `knowledge/`.
 - Framework rules live only in the Framework-managed documents under `knowledge/dev-framework/`. Do not restate or adapt them in other project Knowledge; see [Framework-managed material](project-structure.md#framework-managed-material).
-- Do not link to or depend on `.tmp/` material. Move needed conclusions into the document.
+- Keep `.tmp/` out of Knowledge, as [Temporary material](project-structure.md#temporary-material) says.
 
 ## Form
 
@@ -87,7 +87,7 @@ A project may keep `knowledge/glossary.md`, the single owner of its agreed terms
 
 - Give each term one short entry: `**Term**: meaning. Avoid: <synonyms not to use>.`
 - Use the glossary's terms in documents, code names, and conversation.
-- When a term is fuzzy or used with two meanings, propose a precise term, and record it as soon as the user agrees.
+- When a term is fuzzy or used with two meanings, propose a precise term, and record it once the user agrees, as [Recording decisions](plan-documentation.md#recording-decisions) says.
 
 ## Length
 

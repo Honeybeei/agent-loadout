@@ -250,7 +250,7 @@ describe("findings", () => {
         "knowledge/chat.md": `${doc("Chat")}\nChat streams answers. Not yet implemented.\n`,
       },
       "ssot",
-      'knowledge/chat.md: says "Not yet implemented"; Knowledge states what must hold',
+      'knowledge/chat.md: says "Not yet implemented"; Knowledge never states how far something is built',
     ],
     [
       "a topic that a Framework document owns",
@@ -367,10 +367,10 @@ describe("no false findings", () => {
         "[a](topic.md#pages-and-localization) [b](topic.md#the-dev-next-skill-v2)",
         "[c](topic.md#setup-1) [d](topic.md#legacy) [e](topic.md#한국어-제목)",
         "[f](topic.md#%ED%95%9C%EA%B5%AD%EC%96%B4-%EC%A0%9C%EB%AA%A9) [g](#top) [h](#knowledge)",
-        "[i](../plan/README.md#plan) [j](../AGENTS.md)",
+        "[i](../plan/README.md#plan) [j](../AGENTS.md) [k](topic.md#install) [l](topic.md#top)",
         "",
       ].join("\n"),
-      "knowledge/topic.md": `${doc("Topic")}\n## Pages and localization\n\n## The \`dev-next\` skill (v2)\n\n## Setup\n\n## Setup\n\n<a id="legacy"></a>\n\n## 한국어 제목\n\n\`\`\`md\n## Not a heading\n\`\`\`\n`,
+      "knowledge/topic.md": `${doc("Topic")}\n## Pages and localization\n\n## The \`dev-next\` skill (v2)\n\n## Setup\n\n## Setup\n\n<a id="legacy"></a>\n\n## 한국어 제목\n\n\`\`\`md\n## Not a heading\n\`\`\`\n\nInstall\n=======\n\n- not a heading\n---\n\n## Top\n`,
     });
     expect(messages(root, "links")).not.toContain("matches no heading");
   });

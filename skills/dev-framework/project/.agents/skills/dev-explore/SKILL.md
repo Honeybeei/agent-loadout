@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Find the way: turn low-resolution ideas, concepts, flows, and designs into decisions, so the goal the leaf serves can be planned. Explore produces decisions, not deliverables. While it runs, the explore node is the only record; Knowledge and the rest of the Plan change once, when it finishes.
 
-The project's rules are indexed in [Dev Framework rules](../../../knowledge/dev-framework.md). Before writing to the node, read [Explore nodes](../../../knowledge/dev-framework/plan-documentation/explore.md): it owns the template, the tickets, and the fog-or-ticket test. Commits follow [Git workflow](../../../knowledge/dev-framework/git-workflow.md#commits).
+The project's rules are indexed in [Dev Framework rules](../../../knowledge/dev-framework.md). Before writing to the node, read [Explore nodes](../../../knowledge/dev-framework/plan-documentation/explore.md): it owns the template and the fog-or-ticket test. Commits follow [Git workflow](../../../knowledge/dev-framework/git-workflow.md#commits).
 
 ## 1. Orient
 
@@ -18,7 +18,7 @@ The project's rules are indexed in [Dev Framework rules](../../../knowledge/dev-
 - The lead session runs one leaf at a time. When another explore or collaborative leaf is `in_progress`, say so, and ask whether to continue that one instead.
 - Read `plan/map.md`, the target, the goal it serves and its ancestors' Goal sections, the glossary if it exists, and the Knowledge its area relies on. If the map is missing or stale, regenerate it first (see [Map](#map)).
 - Set a `todo` target to `in_progress`, and chart it at step 2 from what its node already holds. Its finishing commit carries the change.
-- An `in_progress` target that has tickets, decisions, or fog continues at step 3.
+- A target that was already `in_progress` continues at step 3 when it has tickets, decisions, or fog.
 
 ## 2. Chart
 
@@ -49,7 +49,7 @@ Stop when no ticket can be resolved now, or when the user says so. Summarize wha
 Finish when the leaf meets Explore nodes' [Finishing](../../../knowledge/dev-framework/plan-documentation/explore.md#finishing) condition, or when the user ends it early.
 
 1. **Show the changes.** List every line of the node with where it goes, as Plan documentation's [Recording decisions](../../../knowledge/dev-framework/plan-documentation.md#recording-decisions) says, and what For the Plan will change. The user confirms.
-2. **Apply.** Move each line as listed, leaving its gist and a link to its owner.
+2. **Apply.** Move each line as listed. A node you change follows its [Node frame](../../../knowledge/dev-framework/plan-documentation.md#node-frame) and kind document.
 3. **Plan.** Follow [dev-plan](../dev-plan/SKILL.md) step 2 for the goals the results affect, applying For the Plan, and link each item there to the node it became.
 4. **Close the leaf.** Set it `done`, add `Finished: <where the decisions went>, <what planning changed>` to Record, and regenerate the map.
 5. **Commit once.** Offer one commit with the node, Knowledge, and Plan changes: `plan(<node>): <what was decided and planned>`. When it changes a Knowledge document that an `in_progress` blackbox leaf relies on, name those leaves in the same prompt and recommend no effect, notify, or recall for each, as Development workflow's [Changing Knowledge while blackbox leaves run](../../../knowledge/dev-framework/workflow.md#changing-knowledge-while-blackbox-leaves-run) says. For a recall, continue with [dev-blackbox-review](../dev-blackbox-review/SKILL.md) on that leaf after the commit.

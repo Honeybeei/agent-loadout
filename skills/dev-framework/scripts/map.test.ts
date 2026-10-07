@@ -577,6 +577,7 @@ describe("temporaryPaths", () => {
       "The `.tmp/` directory is ignored.",
       "The app caches in `apps/web/.tmp/cache`, `~/.tmp/x`, and <data>/.tmp/y.",
       "Open `.tmp/plan/map.html` for the full picture.",
+      "Nothing lives only in .tmp/.",
     ].join("\n");
     expect(temporaryPaths(text)).toEqual([]);
   });

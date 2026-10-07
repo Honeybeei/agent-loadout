@@ -45,31 +45,31 @@ Show the check groups as a numbered list with each group's script finding count,
 
 ## 3. Check
 
-1. Run the script checks of the selected groups. Besides findings, the script lists each group's judgment units: independent pieces of work, such as one topic, one node, or one document. When `.tmp/doctor/findings.md` remains from an earlier run, offer to continue at step 4 if it still has `proposed` findings; otherwise add `--changed-since` its commit for the groups it covered, unless the user asks for every unit.
+1. When `.tmp/doctor/findings.md` remains from an earlier run and still has `proposed` findings, offer to continue with them at step 4. Otherwise run the script checks of the selected groups, adding `--changed-since` the file's commit for the groups it covered, unless the user asks for every unit. Besides findings, the script lists each group's judgment units: independent pieces of work, such as one topic, one node, or one document.
 2. Read the reference of each selected group.
 3. Run the judgment checks in parallel with subagents, across all selected groups at once. Give each subagent one unit, or a batch of small units from one group, and this brief, filled in and otherwise unchanged:
 
-   > Judge `<units>` of the `<group>` group in `<project root>`, and change nothing. Read `<reference path>` and every rule document it names, in the project's copies under `knowledge/dev-framework/`, and test each unit against every rule in them that applies. Report every break, not a sample: the file and line, the quoted text, the rule's document and section, the severity, and the fix. The severity is `defect` when the text could make a reader or agent act wrongly or miss something, or when content sits with the wrong owner, and `polish` when only its form could improve. A defect's fix is the exact replacement text, which meets the same rules and keeps every condition and link of the text it replaces; a polish fix takes one line. End with one line for each section of those documents: `holds`, `n/a`, or the numbers of its findings.
+   > Judge `<units>` of the `<group>` group in `<project root>`, and change nothing. Read `<reference path>` and every rule document it names, in the project's copies under `knowledge/dev-framework/`, and test each unit against every rule in them that applies. Report every break as a numbered finding, not a sample: the file and line, the quoted text, the rule's document and section, the severity, and the fix. The severity is `defect` when the text could make a reader or agent act wrongly or miss something, or when content sits with the wrong owner, and `polish` when only its form could improve. A defect's fix is the exact replacement text, which meets the same rules and keeps every condition and link of the text it replaces; a polish fix takes one line. End with one line for each section of those documents: `holds`, `n/a`, or the numbers of its findings.
 
    Without subagents, check the units in turn the same way.
-4. Merge the results, combining findings that several units reported for one problem, and write them to `.tmp/doctor/findings.md`, replacing any earlier file: the time, the commit checked, the groups, and whether every unit or only changed ones were judged; then each finding with an id, its group, its kind (`script`, `defect`, or `polish`), the brief's fields, and the status `proposed`.
+4. Merge the results, combining findings that several units reported for one problem, and write them to `.tmp/doctor/findings.md`. Keep the `declined` findings of an earlier file, drop a new finding that repeats one, and replace the rest: the commit checked and the groups, then each finding with an id, its kind (`script`, `defect`, or `polish`), the brief's fields, and the status `proposed`.
 5. Show a summary instead of the findings: per group, the number of script findings, defects, and polish; one line per defect; and the file's path.
 
 ## 4. Propose
 
-The findings file is the proposal. Ask for approval by id, by group, or for all script findings and defects, and wait.
+After a check run, the findings file is the proposal: ask for approval by id, by group, or for all script findings and defects. After Adopt or Update, propose what the reference describes in one short list. Then wait for approval.
 
 - Propose the fix the file gives for each script finding and defect, and group findings of one kind. Offer polish only when the user asks for it.
 - When a fix needs judgment, such as which section a node's content belongs in, recommend a value for each case.
 - List existing material that could later become Plan or Knowledge as later work; do not convert it now.
-- Mark declined findings `declined` in the file, so no later run proposes them again.
+- Mark every finding the user does not approve, polish included, `declined` in the file, so later runs do not propose it again.
 
 ## 5. Apply
 
 1. Work on the current branch, which step 1 confirmed, and create no other branch.
-2. Apply only what the user approved, as the file gives each fix, and mark it `applied`.
-3. Check what the fixes changed. Run the diagnosis, then the script checks of the selected groups with `--changed-since` the file's commit, which list the units the fixes touched. Judge those units as in step 3, adding to the brief: "Judge only the lines that `git diff <commit>` shows, with the rest of each unit as context." Repair at once a defect in text the fixes wrote; add any other new finding to the file and propose it at step 4. Stop after two such passes, and report what remains. Run the checks `AGENTS.md` names only when a fix changed a file other than Markdown.
-4. Show a short summary of the changes, the repairs, and the commit message, and ask whether to commit: the message the reference names, or `chore: conform to the Dev Framework` for check fixes. Commit by path: the Framework-managed material, including the `.claude/skills` link, the map, and the approved fixes. Leave every other change uncommitted. After the commit, set the findings file's commit to the new `HEAD`, so the next run judges only what changes after it.
+2. Apply only what the user approved. Apply a finding as the file gives its fix, and mark it `applied`.
+3. After Adopt or Update, run the diagnosis again, and return to step 4 with any finding the approval did not cover. After a check run, check what the fixes changed: run the diagnosis, then the script checks of the selected groups with `--changed-since` the file's commit, which list the units the fixes touched. Judge those units as in step 3, adding to the brief: "Judge only the lines that `git diff <commit>` shows, and all of each new file, with the rest of each unit as context." Repair at once a defect in text the fixes wrote; add any other new finding to the file and propose it at step 4. Stop after two such passes, and report what remains. Run the checks `AGENTS.md` names only when a fix changed a file other than Markdown.
+4. Show a short summary of the changes, the repairs, and the commit message, and ask whether to commit: the message the reference names, or `chore: conform to the Dev Framework` for check fixes. Commit by path: the Framework-managed material, including the `.claude/skills` link, the map, and the approved fixes with their repairs. Leave every other change uncommitted. After the commit, set the findings file's commit to the new `HEAD`, so the next run judges only what changes after it.
 5. Return to step 1, which leads to the menu with the remaining counts. When the user is done, follow the project's copy of `dev-next` at `.agents/skills/dev-next/SKILL.md`.
 
 ## Authority

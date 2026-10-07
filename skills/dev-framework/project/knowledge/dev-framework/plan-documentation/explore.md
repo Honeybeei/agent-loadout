@@ -16,7 +16,7 @@ An explore leaf is wayfinding: it turns low-resolution ideas, concepts, flows, a
 <The destination: what must be decided, and which planning it enables>
 
 ## Notes
-- <Optional: skills to consult, standing preferences, and links to the Knowledge this leaf starts from>
+- <Optional: skills to consult, standing preferences, and the facts or Knowledge links this leaf starts from>
 
 ## Tickets
 - [grilling] <Question for the user>

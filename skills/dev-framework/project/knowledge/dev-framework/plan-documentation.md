@@ -104,7 +104,7 @@ status: <status>
 
 A decision, or a fact found along the way, is recorded with its owner:
 
-| The decision is | Its owner |
+| What is recorded | Its owner |
 | --- | --- |
 | A product or technical rule or design that stays valid | Knowledge |
 | A decision about one piece of work, such as scope, order, or approach | That node |

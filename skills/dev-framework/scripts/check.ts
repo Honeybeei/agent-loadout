@@ -1,5 +1,5 @@
 // Diagnoses a project against the installed Dev Framework. It changes nothing.
-// Usage: bun check.ts [project-root] [--group <id>[,<id>...]|all]
+// Usage: bun check.ts [project-root] [--group <id>[,<id>...]|all [--changed-since <commit>]]
 // Add a check only when the same mistake keeps recurring; judging content stays with the agent.
 import { spawnSync } from "node:child_process";
 import {
@@ -63,7 +63,7 @@ const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MANAGED_DOCUMENT = /^knowledge\/dev-framework(?:\.md$|\/)/;
 // Progress wording that Knowledge must not hold.
 const BUILD_STATUS =
-  /\bnot yet (?:implemented|built)\b|\bnot (?:implemented|built) yet\b/i;
+  /\bnot (?:yet )?implemented\b|\bnot (?:yet built|built yet)\b|\bunimplemented\b/i;
 // Skills that earlier Framework versions put into projects.
 const OLD_SKILL =
   /^(?:dev-check(?:-[a-z-]+)?|dev-conformance|dev-cycle|dev-framework-report|dev-init|dev-ssot|dev-update|development-cycle|inspect-project)$/;
@@ -267,11 +267,22 @@ const slug = (heading: string) =>
     .replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, "")
     .replace(/ /g, "-");
 
-/** The anchors a link fragment can target: ATX heading slugs, numbered when repeated, and HTML ids. */
+/** The anchors a link fragment can target: heading slugs, numbered when repeated, HTML ids, and `top`. */
 export function anchors(text: string): Set<string> {
-  const found = new Set(["top"]);
+  const found = new Set<string>();
   const repeats = new Map<string, number>();
+  const add = (heading: string) => {
+    const base = slug(heading);
+    let anchor = base;
+    while (found.has(anchor)) {
+      const count = (repeats.get(base) ?? 0) + 1;
+      repeats.set(base, count);
+      anchor = `${base}-${count}`;
+    }
+    found.add(anchor);
+  };
   let fence: string | undefined;
+  let previous = "";
   for (const line of splitFrontmatter(text).body.split(/\r?\n/)) {
     const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
     if (fence !== undefined || marker !== undefined) {
@@ -282,24 +293,22 @@ export function anchors(text: string): Set<string> {
         marker.length >= fence.length
       )
         fence = undefined;
+      previous = "";
       continue;
     }
-    const heading = /^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/.exec(
-      line,
-    );
-    if (heading) {
-      const base = slug(heading[1] ?? "");
-      let anchor = base;
-      while (found.has(anchor)) {
-        const count = (repeats.get(base) ?? 0) + 1;
-        repeats.set(base, count);
-        anchor = `${base}-${count}`;
-      }
-      found.add(anchor);
-    }
+    const atx = /^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/.exec(line);
+    // A setext underline makes the paragraph line above it a heading.
+    const setext =
+      /^ {0,3}(?:=+|-+)[ \t]*$/.test(line) &&
+      /^ {0,3}[^\s#>|*+\-`~<]/.test(previous) &&
+      !/^ {0,3}\d+[.)]\s/.test(previous);
+    if (atx) add(atx[1] ?? "");
+    else if (setext) add(previous);
     for (const match of line.matchAll(/<[a-z][^>]*\s(?:id|name)="([^"]+)"/gi))
       found.add(match[1] ?? "");
+    previous = atx || setext ? "" : line;
   }
+  found.add("top");
   return found;
 }
 
@@ -483,7 +492,7 @@ export function diagnose(projectRoot: string): {
     if (status)
       add(
         "ssot",
-        `${path}: says "${status}"; Knowledge states what must hold, and the Plan and the code say what is built`,
+        `${path}: says "${status}"; Knowledge never states how far something is built, since the Plan and the code say that`,
       );
   }
 
