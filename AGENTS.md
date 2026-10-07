@@ -6,6 +6,17 @@ This repository is the source of truth for the global prompt, personal skills, a
 
 Write this repository's documents by the Framework [writing rules](skills/dev-framework/project/knowledge/dev-framework/writing-rules.md). This repository has no `dev.yaml` and is not a Framework project; only the writing rules apply.
 
+## Keeping rules small
+
+Agents read the global prompt, skills, and Framework in full, and each added line thins their attention on the rest. To fix a problem in them, take the first of these that works:
+
+1. Script it: a mechanical mistake that recurs becomes a check in `check.ts` or `map.ts`, whose message says the fix.
+2. Remove or reword the text that caused or allowed it.
+3. Raise the demand: make the completion criterion of the step where an existing rule applies exhaustive.
+4. Add a rule once, at its owner, as a property of what it governs. A step says when to act and links the rule.
+
+Report each change's net word count and the reading sets it changes, from `bun run size`.
+
 ## Global prompt and Framework boundary
 
 - The global prompt defines how an agent behaves in every working directory and harness. Keep `prompt/` free of project rules such as document writing rules, and of the Framework. Framework projects carry their own managed `AGENTS.md` section and rule copies, so the global prompt does not need to mention the Framework.

@@ -18,6 +18,7 @@ Turn feedback reports into changes to this repository's material. Each report re
 Investigate before asking anything: finding the facts is your job.
 
 - Trace each report's Area to its source.
+- Check each report's Kind: a `missing` report that quotes a rule covering its case is `unapplied`, and its cause is why that rule did not reach the agent.
 - Check whether the source changed after the report's agent-loadout commit, with `git log --oneline <commit>..HEAD -- <source paths>`, and read those changes; they may already solve the problem.
 - Find why the material is the way it is: the commits that shaped it (`git log -- <path>`, `git log -S '<phrase>'`) and any design notes in `.tmp/design/`.
 - Group reports that share a cause. Note reports that contradict each other or a settled decision.
@@ -30,7 +31,7 @@ Work one group at a time with [grilling](../../../skills/dev-framework/project/.
 
 - Start with the problem, not the fix: confirm what went wrong and why, until the cause is clear.
 - When the fix would change a deliberate decision, show the decision's original reason beside the report's evidence, and let the user judge whether the new evidence outweighs it.
-- Recommend the smallest change to the document or skill that owns the cause.
+- Recommend the first fix in [Keeping rules small](../../../AGENTS.md#keeping-rules-small) that solves the cause, in the document or skill that owns it.
 - When grilling runs past a few questions, record settled decisions in `.tmp/design/<topic>.md` as you go.
 
 A group is settled when its cause, its fix, and the files to change are agreed. Summarize the settled groups and the groups set aside with their reasons, and wait for the user's confirmation.
@@ -40,7 +41,7 @@ A group is settled when its cause, its fix, and the files to change are agreed. 
 1. On `main`, create `work/<short-purpose>` before the first edit.
 2. Make the agreed changes, one group at a time, following this repository's AGENTS.md: update the README and every link a change affects, and keep skills harness-neutral.
 3. Run `bun run lint`, `bun run typecheck`, and `bun run test`, and fix the failures the change caused.
-4. Show the result per group: the files changed and the check results.
+4. Show the result per group: the files changed, the net word count from `bun run size`, and the check results.
 
 ## 5. Publish
 
