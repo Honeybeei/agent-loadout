@@ -202,6 +202,19 @@ describe("the command line", () => {
     expect(readState(root)).toEqual({ verdicts: [], leads: [], findings: [] });
   });
 
+  test("add refuses a verdict that cites a finding the report lacks", () => {
+    const root = project();
+    const leads = plan(root);
+    // A heading the parser does not read drops the finding, so the verdict would stand for nothing.
+    const report = `${finding(1, "knowledge/product/chat.md:9").replace("## 1 · defect", "## 1 - defect")}\n## Leads\n\n- ${leads[0]?.id}: not a finding: the same sense.\n\n## Verdicts\n\n- knowledge/product/chat.md: findings 1\n${holds}`;
+    const result = run(root, "findings.ts", ["add", "1"], report);
+    expect(result.code).toBe(2);
+    expect(result.err).toContain(
+      "the verdict for knowledge/product/chat.md cites finding 1, which the report does not have",
+    );
+    expect(readState(root)).toEqual({ verdicts: [], leads: [], findings: [] });
+  });
+
   test("a finding with a Decision is applied only after its answer", () => {
     const root = project();
     const leads = plan(root);

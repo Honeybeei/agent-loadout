@@ -967,10 +967,10 @@ if (import.meta.main) {
   };
   if (options.has("--batch")) {
     const number = Number(options.get("--batch"));
-    const root = realpathSync(resolve(positional[0] ?? "."));
-    const plan = readPlan(root);
     if (positional.length > 1 || options.size > 1 || !(number >= 1))
       fail(USAGE);
+    const root = realpathSync(resolve(positional[0] ?? "."));
+    const plan = readPlan(root);
     if (!plan) fail(`${PLAN} does not exist; plan the review first`);
     const text = plan ? renderBatch(root, plan, number) : "";
     if (text === "")

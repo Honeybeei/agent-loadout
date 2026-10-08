@@ -23,7 +23,7 @@ export { END, START };
 
 export const REPO = resolve(import.meta.dir, "..");
 export const SOURCE = join(REPO, "project");
-/** The source an installed snapshot was built from, which `bun run install` writes beside it. */
+/** The source an installed snapshot was built from, which `bun run setup` writes beside it. */
 export const INSTALLED_SOURCE = "source.json";
 /** What the last apply wrote: the source it came from and the managed paths. */
 export const RECORD = ".dev/framework.json";
