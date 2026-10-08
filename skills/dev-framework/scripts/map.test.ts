@@ -682,6 +682,96 @@ describe("loadPlan problems", () => {
       "c: names .tmp/research/stack.md in .tmp/, which may be deleted; move what later work needs into the node or Knowledge, and remove the path",
     ]);
   });
+
+  test("a handed-off line in a goal or a done leaf links its receiver or says not planned", () => {
+    const root = project({
+      root: goal("Product", null).replace(
+        "## Goal\nA goal.\n",
+        "## Goal\nA goal.\n\n## Out of scope\n- Mobile apps: not planned, desktop only.\n- Settings: [Settings](settings.md) builds them.\n- Signing: someone builds it.\n- Login: [Login](login.md) was dropped.\n",
+      ),
+      settings: leaf("Settings", "root", "collaborative", "todo"),
+      login: leaf("Login", "root", "collaborative", "cancelled"),
+      a: leaf(
+        "A",
+        "root",
+        "explore",
+        "done",
+        "\n## For the Plan\n- Pricing: the [glossary](../../knowledge/glossary.md) holds it.\n- Onboarding: the features that need it.\n",
+      ),
+      b: leaf(
+        "B",
+        "root",
+        "explore",
+        "todo",
+        "\n## Out of scope\n- Theme switching.\n",
+      ),
+    });
+    mkdirSync(join(root, "knowledge"));
+    writeFileSync(join(root, "knowledge", "glossary.md"), "# Glossary\n");
+    const rule =
+      "names no receiver; link the node that holds it, not a cancelled one, or the Knowledge document, or say `not planned`, as Recording decisions in knowledge/dev-framework/plan-documentation.md says";
+    expect(loadPlan(root).errors).toEqual([
+      `a: the For the Plan line "Onboarding: the features that need it." ${rule}`,
+      `root: the Out of scope line "Signing: someone builds it." ${rule}`,
+      `root: the Out of scope line "Login: [Login](login.md) was dropped." ${rule}`,
+    ]);
+  });
+
+  test("every edit to a Goal in Git needs a Goal changed line", () => {
+    const root = project({
+      root: goal("Product", null),
+      a: leaf("A", "root", "explore", "todo"),
+    });
+    const git = (...args: string[]) =>
+      Bun.spawnSync(["git", "-C", root, ...args], {
+        env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", HOME: root },
+      });
+    git("init", "-q", "-b", "main");
+    git("config", "user.name", "Test");
+    git("config", "user.email", "test@example.com");
+    git("add", "-A");
+    git("commit", "-q", "-m", "Plan");
+    const path = join(root, "plan", "nodes", "a.md");
+    writeFileSync(
+      path,
+      readFileSync(path, "utf8").replace("A goal.", "A wider goal."),
+    );
+    expect(loadPlan(root).errors).toEqual([
+      'a: its Goal has had 2 versions in Git, but Record has 0 "Goal changed:" lines; add one for each edit, quoting the Goal before it, as Node frame in knowledge/dev-framework/plan-documentation.md says. Earlier Goals, oldest first: "A goal."',
+    ]);
+    writeFileSync(
+      path,
+      readFileSync(path, "utf8").replace(
+        "## Record\n",
+        "## Record\n- Goal changed: A goal., the scope grew.\n",
+      ),
+    );
+    git("commit", "-q", "-am", "Widen");
+    // Reflowing a Goal is not an edit.
+    writeFileSync(
+      path,
+      readFileSync(path, "utf8").replace("A wider goal.", "A\n  wider goal."),
+    );
+    expect(loadPlan(root).errors).toEqual([]);
+  });
+
+  test("a done explore leaf dates each decision", () => {
+    const errors = loadPlan(
+      project({
+        root: goal("Product", null),
+        a: leaf(
+          "A",
+          "root",
+          "explore",
+          "done",
+          "\n## Decisions so far\n- Which stack → Astro, 2026-10-01, over Next.js\n- Where it runs → Cloudflare\n",
+        ),
+      }),
+    ).errors;
+    expect(errors).toEqual([
+      'a: the decision "Where it runs → Cloudflare" has no date; add the date the user approved it, as Recording decisions in knowledge/dev-framework/plan-documentation.md says',
+    ]);
+  });
 });
 
 describe("temporaryPaths", () => {

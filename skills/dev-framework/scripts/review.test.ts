@@ -250,21 +250,49 @@ describe("leads", () => {
     );
   });
 
-  test("point at a changed Goal without its Record line, and at questions left in an explore leaf", () => {
-    const root = project({ "plan/nodes/a.md": node("a", "root", "explore") });
-    write(root, {
+  test("point at history in a Goal, criteria after a Goal change, and questions left in an explore leaf", () => {
+    const root = project({
       "plan/nodes/a.md": node(
         "a",
         "root",
         "explore",
         "\n## Not yet specified\n- Which formats does it read?\n",
-      ).replace("A goal.", "Another goal."),
+      ).replace("A goal.", "A goal. It grew to include the icon."),
+      "plan/nodes/g.md": node(
+        "g",
+        "root",
+        "goal",
+        "\n## Completion criteria\n- [ ] It runs.\n\n## Record\n- Goal changed: A smaller goal, the icon joined.\n",
+      ),
     });
     expect(notes(root, "defect", "plan/nodes/a.md")).toEqual([
       "status todo",
-      'lead: its Goal differs from the node\'s first version, and Record has no "Goal changed:" line: did the meaning change?',
+      'lead: its Goal says "grew to": history that belongs in Record?',
       'lead: a question under Not yet specified: can it be stated precisely as a ticket? "- Which formats does it read?"',
     ]);
+    expect(notes(root, "defect", "plan/nodes/g.md")).toEqual([
+      "status open",
+      "lead: its Goal changed: do the Completion criteria cover what the Goal gained?",
+    ]);
+  });
+
+  test("leave whole decision lines and Goal changed lines in a finished node alone", () => {
+    const long = "word ".repeat(60);
+    const root = project({
+      "plan/nodes/a.md": node(
+        "a",
+        "root",
+        "explore",
+        `\n## Decisions so far\n- Which format? → ${long}, 2026-10-01\n`,
+      )
+        .replace("status: todo", "status: done")
+        .replace(
+          /## Record\n$/,
+          `## Record\n- Goal changed: ${long}, it grew.\n- Finished: decided.\n`,
+        ),
+    });
+    expect(notes(root, "defect", "plan/nodes/a.md")).toEqual(["status done"]);
+    expect(notes(root, "polish", "plan/nodes/a.md")).toEqual(["status done"]);
   });
 
   test("list a goal's children, and the declined findings in a document", () => {

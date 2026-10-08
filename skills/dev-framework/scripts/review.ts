@@ -230,6 +230,9 @@ const PROGRESS =
 const DATE = /\b\d{4}-\d{2}-\d{2}\b/;
 const QUESTION =
   /\?\s*$|^[-*+]\s+(?:how|where|which|whether|what|when|why|should)\b/i;
+const HISTORY =
+  /\b(?:first|once|originally) (?:read|covered|said)\b|\bgrew to\b|\bjoined because\b|\bre-?scoped\b|\ban earlier attempt\b/i;
+const HANDOFF = ["Out of scope", "For the Plan"];
 const LONG_ITEM = 50;
 const LEADS_PER_DOCUMENT = 12;
 
@@ -260,8 +263,12 @@ function findLeads(
         );
       const node = nodeOf(path);
       if (node)
+        // A Goal changed line quotes the whole earlier Goal.
         for (const item of items(node.body, "Record"))
-          if (wordCount(item) > LONG_ITEM)
+          if (
+            !/^[-*+]\s+Goal changed:/.test(item) &&
+            wordCount(item) > LONG_ITEM
+          )
             add(
               path,
               `a Record line of ${wordCount(item)} words: "${short(item)}"`,
@@ -382,41 +389,41 @@ function findLeads(
             `links ${target} in another workspace's Knowledge: should the shared part live in root knowledge/?`,
           );
       }
-    if (node) nodeLeads(root, path, node, (lead) => add(path, lead));
+    if (node) nodeLeads(node, (lead) => add(path, lead));
   }
   return leads;
 }
 
-function nodeLeads(
-  root: string,
-  path: string,
-  node: PlanNode,
-  add: (lead: string) => void,
-): void {
+function nodeLeads(node: PlanNode, add: (lead: string) => void): void {
   const goal = sections(node.body).find((s) => s.heading === "Goal");
-  const record = items(node.body, "Record");
-  if (goal && !record.some((line) => /^[-*+]\s+Goal changed:/.test(line))) {
-    const first = firstVersion(root, path);
-    const original =
-      first === undefined
-        ? undefined
-        : sections(
-            first.slice(
-              /^---\r?\n[\s\S]*?\r?\n---/.exec(first)?.[0].length ?? 0,
-            ),
-          ).find((s) => s.heading === "Goal");
-    const flat = (lines: string[]) =>
-      lines.join(" ").replace(/\s+/g, " ").trim();
-    if (original && flat(original.lines) !== flat(goal.lines))
-      add(
-        `its Goal differs from the node's first version, and Record has no "Goal changed:" line: did the meaning change?`,
-      );
+  for (const line of goal?.lines ?? []) {
+    const history = HISTORY.exec(line)?.[0];
+    if (history)
+      add(`its Goal says "${history}": history that belongs in Record?`);
   }
+  if (
+    items(node.body, "Record").some((line) =>
+      /^[-*+]\s+Goal changed:/.test(line),
+    ) &&
+    sections(node.body).some((s) => s.heading === "Completion criteria")
+  )
+    add(
+      "its Goal changed: do the Completion criteria cover what the Goal gained?",
+    );
   const finished = node.status === "done";
   for (const section of sections(node.body)) {
     if (section.heading === "Record") continue;
     for (const item of section.lines.filter((line) => /^[-*+]\s/.test(line))) {
-      if (finished && node.kind !== "goal" && wordCount(item) > LONG_ITEM)
+      // A decision line is the record of what the user approved, kept whole; a handed-off line points to its receiver.
+      const decision =
+        section.heading === "Decisions so far" ||
+        (!HANDOFF.includes(section.heading) && item.includes("→"));
+      if (
+        finished &&
+        node.kind !== "goal" &&
+        !decision &&
+        wordCount(item) > LONG_ITEM
+      )
         add(
           `a ${wordCount(item)}-word line under ${section.heading} in a finished node: a gist with a link, or detail its owner should hold? "${short(item)}"`,
         );
@@ -438,27 +445,6 @@ function nodeLeads(
     )
       add("a planned goal without Completion criteria: are they known yet?");
   }
-}
-
-/** The node's text when Git first saw it, following renames, or undefined when it is not committed. */
-function firstVersion(root: string, path: string): string | undefined {
-  let commit: string | undefined;
-  let name: string | undefined;
-  for (const line of git(root, [
-    "log",
-    "--follow",
-    "--format=commit %h",
-    "--name-only",
-    "--",
-    path,
-  ])
-    .stdout.split("\n")
-    .filter(Boolean))
-    if (line.startsWith("commit ")) commit = line.slice("commit ".length);
-    else name = line;
-  if (!commit || !name) return undefined;
-  const shown = git(root, ["show", `${commit}:${name}`]);
-  return shown.status === 0 ? shown.stdout : undefined;
 }
 
 /** The words the glossary says to avoid, each with a test for a line and the term to use instead. */

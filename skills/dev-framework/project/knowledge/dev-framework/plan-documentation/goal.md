@@ -21,7 +21,7 @@ A goal is a todo split into child nodes. It is never run directly: planning spli
 - [ ] <What must hold once the children are combined, as far as known>
 
 ## Out of scope
-- <What this goal excludes, and why>
+- <What this goal excludes, and why> → <receiver, or `not planned`>
 
 ## Record
 - Planned: <what the split produced, and why>

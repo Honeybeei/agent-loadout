@@ -98,7 +98,7 @@ status: <status>
 - <One line per event in the node's life, linking to the detail>
 ```
 
-- When the meaning of a Goal changes, add `Goal changed: <the original Goal>, <the reason>` to Record.
+- Every edit to a Goal adds `Goal changed: <the Goal before the edit>, <the reason>` to Record, and brings the sections that depend on the Goal, such as Completion criteria, in line.
 
 ## Recording decisions
 
@@ -112,9 +112,11 @@ A decision, or a fact found along the way, is recorded with its owner:
 | A term the user agrees on | The glossary |
 
 - A running explore or collaborative leaf holds its decisions and findings in its own node. Knowledge and other nodes stay unchanged until it finishes, which saves repeated edits and absorbs decisions reversed along the way.
-- When it finishes, it accounts for every line of the node, wherever it sits, Notes and inputs for other nodes included: the line moves to its owner, or is specific to this work and stays. A moved line leaves its gist and a link to the owner, never a restatement, so the node ends as an index.
+- When it finishes, it accounts for every line of the node, wherever it sits, Notes and inputs for other nodes included: the line moves to its owner, or is specific to this work and stays. A moved line leaves its gist and a link to the owner, never a restatement.
+- A decision line records what the user approved: the question, the answer, the date, and the alternatives considered, with a link to its owner. It is never cut or edited once the node finishes; a later change is a new decision, and the owner holds the current rule.
+- A line in Out of scope or For the Plan, or a `Left:` line, links its receiver, the node or Knowledge document that holds it, or says `not planned`. When no node fits, planning creates one.
 - An answer the user gives is an approved decision. An agent's proposal stays open until the user confirms it.
-- Keep Record lines short. The detail lives in one owner, and Record links to it.
+- Keep Record lines short, apart from the Goal a `Goal changed:` line quotes. The detail lives in one owner, and Record links to it.
 - Keep failed attempts and cancelled work in Record; they explain later choices.
 
 ## Map

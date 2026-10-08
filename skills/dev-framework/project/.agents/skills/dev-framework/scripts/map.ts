@@ -10,7 +10,7 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 
 export const KINDS = ["goal", "explore", "collaborative", "blackbox"] as const;
 export type Kind = (typeof KINDS)[number];
@@ -136,6 +136,23 @@ export function items(body: string, heading: string): string[] {
   const lines = sections(body).find((s) => s.heading === heading)?.lines ?? [];
   return lines.filter((line) => /^[-*+]\s/.test(line));
 }
+
+/** The list items of one section, each joined with its indented continuation lines. */
+function entries(body: string, heading: string): string[] {
+  const result: string[] = [];
+  for (const line of sections(body).find((s) => s.heading === heading)?.lines ??
+    [])
+    if (/^[-*+]\s/.test(line)) result.push(line);
+    else if (/^\s+\S/.test(line) && result.length > 0)
+      result[result.length - 1] += ` ${line.trim()}`;
+  return result;
+}
+
+const flat = (text: string) => text.replace(/\s+/g, " ").trim();
+const gist = (text: string) => {
+  const line = flat(text.replace(/^[-*+]\s+/, ""));
+  return line.length > 70 ? `${line.slice(0, 69)}…` : line;
+};
 
 export function countOpenTickets(body: string): number {
   return items(body, "Tickets").length;
@@ -304,6 +321,171 @@ function parseNode(
   };
 }
 
+const PLAN_RULES = "knowledge/dev-framework/plan-documentation.md";
+
+/** Lines that hand an item elsewhere link the node or Knowledge that holds it, or say `not planned`. */
+function checkReceivers(
+  projectRoot: string,
+  nodes: Map<string, PlanNode>,
+  errors: string[],
+): void {
+  for (const node of nodes.values()) {
+    // Planning writes a goal's lines with the tree in view; a leaf's are settled when it finishes.
+    if (
+      node.status === "cancelled" ||
+      (node.kind !== "goal" && node.status !== "done")
+    )
+      continue;
+    const handed = [
+      ...["Out of scope", "For the Plan"].flatMap((heading) =>
+        entries(node.body, heading).map((line) => ({ heading, line })),
+      ),
+      ...entries(node.body, "Record")
+        .filter((line) => /^[-*+]\s+Left:/.test(line))
+        .map((line) => ({ heading: "Record", line })),
+    ];
+    for (const { heading, line } of handed) {
+      if (/\bnot planned\b/i.test(line)) continue;
+      const receiver = [...line.matchAll(/\]\(<?([^)\s>#]+)/g)]
+        .map((match) =>
+          relative(
+            projectRoot,
+            resolve(projectRoot, "plan", "nodes", match[1] ?? ""),
+          ),
+        )
+        .some((path) => {
+          const id = /^plan\/nodes\/([^/]+)\.md$/.exec(path)?.[1];
+          if (id !== undefined)
+            return nodes.has(id) && nodes.get(id)?.status !== "cancelled";
+          return (
+            path.startsWith("knowledge/") && existsSync(join(projectRoot, path))
+          );
+        });
+      if (!receiver)
+        errors.push(
+          `${node.id}: the ${heading} line "${gist(line)}" names no receiver; link the node that holds it, not a cancelled one, or the Knowledge document, or say \`not planned\`, as Recording decisions in ${PLAN_RULES} says`,
+        );
+    }
+  }
+}
+
+/** Each node's committed texts, newest first, read with one log and one cat-file; none outside Git. */
+function committedNodes(projectRoot: string): Map<string, string[]> {
+  const texts = new Map<string, string[]>();
+  const log = spawnSync(
+    "git",
+    [
+      "-C",
+      projectRoot,
+      "log",
+      "-m",
+      "--relative",
+      "--diff-filter=d",
+      "--format=%x00%H",
+      "--name-only",
+      "--",
+      "plan/nodes/",
+    ],
+    { encoding: "utf8", maxBuffer: 1 << 30 },
+  );
+  if (log.status !== 0) return texts;
+  const requests: { id: string; spec: string }[] = [];
+  for (const chunk of log.stdout.split("\0")) {
+    const [commit, ...files] = chunk.split("\n").filter(Boolean);
+    for (const file of files) {
+      const id = /^plan\/nodes\/([^/]+)\.md$/.exec(file)?.[1];
+      if (commit !== undefined && id !== undefined)
+        requests.push({ id, spec: `${commit}:./${file}` });
+    }
+  }
+  if (requests.length === 0) return texts;
+  const batch = spawnSync("git", ["-C", projectRoot, "cat-file", "--batch"], {
+    input: `${requests.map((r) => r.spec).join("\n")}\n`,
+    maxBuffer: 1 << 30,
+  });
+  if (batch.status !== 0) return texts;
+  const output = batch.stdout;
+  let at = 0;
+  for (const { id } of requests) {
+    const end = output.indexOf(0x0a, at);
+    if (end < 0) break;
+    const size = /^\S+ blob (\d+)$/.exec(
+      output.subarray(at, end).toString(),
+    )?.[1];
+    at = end + 1;
+    if (size === undefined) continue;
+    texts.set(id, [
+      ...(texts.get(id) ?? []),
+      output.subarray(at, at + Number(size)).toString("utf8"),
+    ]);
+    at += Number(size) + 1;
+  }
+  return texts;
+}
+
+const goalOf = (text: string) =>
+  flat(
+    sections(text.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, ""))
+      .find((s) => s.heading === "Goal")
+      ?.lines.join(" ") ?? "",
+  );
+
+/** Every edit to a Goal adds a `Goal changed:` line, counted against the Goal's versions in Git. */
+function checkGoalHistory(
+  projectRoot: string,
+  nodes: Map<string, PlanNode>,
+  errors: string[],
+): void {
+  const committed = committedNodes(projectRoot);
+  for (const node of nodes.values()) {
+    const current = goalOf(node.body);
+    const earlier = [
+      ...new Set((committed.get(node.id) ?? []).map(goalOf).reverse()),
+    ].filter((goal) => goal !== "" && goal !== current);
+    const changed = entries(node.body, "Record").filter((line) =>
+      /^[-*+]\s+Goal changed:/.test(line),
+    ).length;
+    if (changed < earlier.length)
+      errors.push(
+        `${node.id}: its Goal has had ${earlier.length + 1} versions in Git, but Record has ${changed} "Goal changed:" lines; add one for each edit, quoting the Goal before it, as Node frame in ${PLAN_RULES} says. Earlier Goals, oldest first: ${earlier.map((goal) => `"${goal}"`).join("; ")}`,
+      );
+  }
+}
+
+/** A finished explore leaf's decision lines carry the date the user approved them. */
+function checkDecisionDates(
+  projectRoot: string,
+  nodes: Map<string, PlanNode>,
+  errors: string[],
+): void {
+  for (const node of nodes.values()) {
+    if (node.kind !== "explore" || node.status !== "done") continue;
+    for (const line of entries(node.body, "Decisions so far")) {
+      if (/\b\d{4}-\d{2}-\d{2}\b/.test(line)) continue;
+      const first = spawnSync(
+        "git",
+        [
+          "-C",
+          projectRoot,
+          "log",
+          "--reverse",
+          "--date=short",
+          "--format=%ad",
+          "-S",
+          line.replace(/^[-*+]\s+/, "").slice(0, 60),
+          "--",
+          `plan/nodes/${node.id}.md`,
+        ],
+        { encoding: "utf8" },
+      );
+      const date = first.status === 0 ? first.stdout.split("\n")[0] : "";
+      errors.push(
+        `${node.id}: the decision "${gist(line)}" has no date; add the date the user approved it, as Recording decisions in ${PLAN_RULES} says${date ? `. The line first appears in a commit of ${date}` : ""}`,
+      );
+    }
+  }
+}
+
 export function loadPlan(projectRoot: string): Plan {
   const directory = join(projectRoot, "plan", "nodes");
   const nodes = new Map<string, PlanNode>();
@@ -378,6 +560,9 @@ export function loadPlan(projectRoot: string): Plan {
       `${collaborating.map((n) => n.id).join(", ")}: at most one collaborative leaf may be in_progress`,
     );
 
+  checkReceivers(projectRoot, nodes, errors);
+  checkGoalHistory(projectRoot, nodes, errors);
+  checkDecisionDates(projectRoot, nodes, errors);
   return { root, nodes, errors };
 }
 
