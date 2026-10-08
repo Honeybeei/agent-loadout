@@ -4,7 +4,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import { markdownLinks } from "../skills/dev-framework/scripts/check.ts";
+import { markdownLinks } from "../skills/dev-framework/project/.agents/skills/dev-framework/scripts/check.ts";
 import { REPO } from "./apply.ts";
 
 /** The areas agents read; a file counts in the first area that matches it. */

@@ -8,14 +8,16 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import { hardWraps } from "../project/.agents/skills/dev-framework/scripts/check.ts";
 import {
+  knowledgeIndex,
   loadPlan,
   renderMap,
 } from "../project/.agents/skills/dev-framework/scripts/map.ts";
-import { type Area, diagnose, hardWraps } from "./check.ts";
+import { type Area, diagnose } from "./doctor.ts";
 import { planSync } from "./sync.ts";
 
-const CHECK = join(import.meta.dir, "check.ts");
+const CHECK = join(import.meta.dir, "doctor.ts");
 const roots: string[] = [];
 
 afterEach(() => {
@@ -56,7 +58,13 @@ const node = (
   `---\ntitle: ${id}\nparent: ${parent}\ndepends_on: []\nkind: ${kind}\nstatus: ${status}\n---\n\n# ${id}\n\n## Goal\nA goal.\n${kind === "goal" ? "" : "\n## Record\n"}`;
 
 const doc = (title: string, fields = "") =>
-  `---\ncanonical_for:\n  - ${title}\n${fields}---\n\n# ${title}\n`;
+  `---\ncanonical_for:\n  - ${title}\nread_when: before changing ${title}\n${fields}---\n\n# ${title}\n`;
+
+/** Writes the files, then the Knowledge index the map script would generate for them. */
+function writeIndexed(root: string, files: Record<string, string>) {
+  write(root, files);
+  write(root, { "knowledge/README.md": knowledgeIndex(root).text ?? "" });
+}
 
 /** An adopted project that follows every rule the script checks. */
 function project(): string {
@@ -64,12 +72,11 @@ function project(): string {
     "dev.yaml": "workspaces:\n  - .\n",
     "README.md":
       "# Project\n\nRead [AGENTS](AGENTS.md), [Knowledge](knowledge/README.md), and [Plan](plan/README.md).\n",
-    "knowledge/README.md": "# Knowledge\n",
     "plan/README.md": "# Plan\n\nRead the [map](map.md).\n",
     "plan/nodes/root.md": node("root", null, "goal", "open"),
   });
   for (const change of planSync(root).changes) change.apply(root);
-  write(root, { "plan/map.md": renderMap(loadPlan(root)) });
+  writeIndexed(root, { "plan/map.md": renderMap(loadPlan(root)) });
   git(root, "add", "-A");
   git(root, "commit", "-q", "-m", "Adopt the Dev Framework");
   return root;
@@ -187,114 +194,151 @@ describe("findings", () => {
     ],
     [
       "Knowledge without canonical_for",
-      { "knowledge/topic.md": "# Topic\n" },
+      { "knowledge/product/topic.md": "# Topic\n" },
       "knowledge",
-      "knowledge/topic.md: frontmatter needs canonical_for",
+      "knowledge/product/topic.md: frontmatter needs canonical_for",
     ],
     [
       "a Knowledge file name that is not kebab-case",
-      { "knowledge/My_Topic.md": doc("My topic") },
+      { "knowledge/product/My_Topic.md": doc("My topic") },
       "knowledge",
-      "knowledge/My_Topic.md: file name must be kebab-case",
+      "knowledge/product/My_Topic.md: file name must be kebab-case",
     ],
     [
       "Knowledge with two H1 headings",
-      { "knowledge/topic.md": `${doc("Topic")}\n# Another\n` },
+      { "knowledge/product/topic.md": `${doc("Topic")}\n# Another\n` },
       "knowledge",
-      "knowledge/topic.md: needs exactly one H1 heading, has 2",
+      "knowledge/product/topic.md: needs exactly one H1 heading, has 2",
     ],
     [
       "a child document missing from subdocs",
       {
-        "knowledge/topic.md": doc("Topic"),
-        "knowledge/topic/part.md": doc("Part"),
+        "knowledge/product/topic.md": doc("Topic"),
+        "knowledge/product/topic/part.md": doc("Part"),
       },
       "knowledge",
-      "knowledge/topic.md: subdocs does not list ./topic/part.md",
+      "knowledge/product/topic.md: subdocs does not list ./topic/part.md",
     ],
     [
       "subdocs that lists a missing document",
-      { "knowledge/topic.md": doc("Topic", "subdocs:\n  - ./topic/gone.md\n") },
+      {
+        "knowledge/product/topic.md": doc(
+          "Topic",
+          "subdocs:\n  - ./topic/gone.md\n",
+        ),
+      },
       "knowledge",
-      "knowledge/topic.md: subdocs lists ./topic/gone.md, which does not exist",
+      "knowledge/product/topic.md: subdocs lists ./topic/gone.md, which does not exist",
     ],
     [
-      "workspace Knowledge without canonical_for",
+      "Knowledge in a workspace",
       {
         "dev.yaml": "workspaces:\n  - apps/web\n",
         "apps/web/README.md": "# Web\n",
-        "apps/web/knowledge/README.md": "# Web Knowledge\n",
-        "apps/web/knowledge/api.md": "# API\n",
+        "apps/web/knowledge/api.md": doc("API"),
       },
       "knowledge",
-      "apps/web/knowledge/api.md: frontmatter needs canonical_for",
+      "apps/web/knowledge/ holds Knowledge outside root knowledge/",
+    ],
+    [
+      "Knowledge outside a category",
+      { "knowledge/topic.md": doc("Topic") },
+      "knowledge",
+      "knowledge/topic.md: move it, with any subdocuments, into the category whose question it answers",
+    ],
+    [
+      "a directory that is not a category",
+      { "knowledge/notes/topic.md": doc("Topic") },
+      "knowledge",
+      "knowledge/notes/ is not a category",
+    ],
+    [
+      "a README inside a category",
+      { "knowledge/product/README.md": "# Product\n" },
+      "knowledge",
+      "knowledge/product/README.md: a category holds only documents",
+    ],
+    [
+      "Knowledge without read_when",
+      {
+        "knowledge/product/topic.md":
+          "---\ncanonical_for:\n  - Topic\n---\n\n# Topic\n",
+      },
+      "knowledge",
+      "knowledge/product/topic.md: frontmatter needs read_when",
+    ],
+    [
+      "a stale Knowledge index",
+      { "knowledge/product/topic.md": doc("Topic") },
+      "knowledge",
+      "knowledge/README.md is stale; regenerate it with the map script",
     ],
     [
       "a broken link",
-      { "knowledge/README.md": "# Knowledge\n\nSee [the topic](topic.md).\n" },
+      { "docs/guide.md": "# Guide\n\nSee [the topic](topic.md).\n" },
       "links",
-      "knowledge/README.md: broken link to topic.md",
+      "docs/guide.md: broken link to topic.md",
     ],
     [
       "a topic with two owners",
       {
-        "knowledge/deploy.md": doc("Deployment"),
-        "knowledge/ops.md": doc("deployment"),
+        "knowledge/delivery/deploy.md": doc("Deployment"),
+        "knowledge/engineering/ops.md": doc("deployment"),
       },
       "ssot",
-      '"Deployment" is in canonical_for of knowledge/deploy.md and knowledge/ops.md',
+      '"Deployment" is in canonical_for of knowledge/delivery/deploy.md and knowledge/engineering/ops.md',
     ],
     [
       "build status in Knowledge",
       {
-        "knowledge/chat.md": `${doc("Chat")}\nChat streams answers. Not yet implemented.\n`,
+        "knowledge/product/chat.md": `${doc("Chat")}\nChat streams answers. Not yet implemented.\n`,
       },
       "ssot",
-      'knowledge/chat.md:8: says "Not yet implemented"; Knowledge never states how far something is built',
+      'knowledge/product/chat.md:9: says "Not yet implemented"; Knowledge never states how far something is built',
     ],
     [
       "a topic that a Framework document owns",
-      { "knowledge/style.md": doc("Documentation style") },
+      { "knowledge/engineering/style.md": doc("Documentation style") },
       "ssot",
-      '"Documentation style" is in canonical_for of knowledge/dev-framework/writing-rules.md and knowledge/style.md',
+      '"Documentation style" is in canonical_for of knowledge/dev-framework/writing-rules.md and knowledge/engineering/style.md',
     ],
     [
       "a link from Knowledge to .tmp/",
       {
-        "knowledge/topic.md": `${doc("Topic")}\nSee [notes](../.tmp/notes.md).\n`,
+        "knowledge/product/topic.md": `${doc("Topic")}\nSee [notes](../../.tmp/notes.md).\n`,
       },
       "links",
-      "knowledge/topic.md: names ../.tmp/notes.md in .tmp/, which may be deleted",
+      "knowledge/product/topic.md: names ../../.tmp/notes.md in .tmp/, which may be deleted",
     ],
     [
       "a .tmp/ path that Knowledge names without a link",
       {
-        "knowledge/topic.md": `${doc("Topic")}\nThe detail is in \`.tmp/research/topic.md\`.\n`,
+        "knowledge/product/topic.md": `${doc("Topic")}\nThe detail is in \`.tmp/research/topic.md\`.\n`,
       },
       "links",
-      "knowledge/topic.md: names .tmp/research/topic.md in .tmp/",
+      "knowledge/product/topic.md: names .tmp/research/topic.md in .tmp/",
     ],
     [
       "a link to a heading that does not exist",
       {
-        "knowledge/README.md":
-          "# Knowledge\n\nRead [localization](topic.md#localization).\n",
-        "knowledge/topic.md": `${doc("Topic")}\n## Pages and localization\n`,
+        "docs/guide.md":
+          "# Guide\n\nRead [localization](../knowledge/product/topic.md#localization).\n",
+        "knowledge/product/topic.md": `${doc("Topic")}\n## Pages and localization\n`,
       },
       "links",
-      "knowledge/README.md: broken link to topic.md#localization, which matches no heading",
+      "docs/guide.md: broken link to ../knowledge/product/topic.md#localization, which matches no heading",
     ],
     [
       "a link to a heading of the same document that does not exist",
-      { "knowledge/README.md": "# Knowledge\n\nSee [below](#usage).\n" },
+      { "docs/guide.md": "# Guide\n\nSee [below](#usage).\n" },
       "links",
-      "knowledge/README.md: broken link to #usage, which matches no heading",
+      "docs/guide.md: broken link to #usage, which matches no heading",
     ],
     [
       "Knowledge the root README does not reach",
-      { "knowledge/topic.md": doc("Topic") },
+      { "knowledge/product/topic.md": doc("Topic") },
       "links",
-      "knowledge/topic.md: not reachable from the root README",
+      "knowledge/product/topic.md: not reachable from the root README",
     ],
     [
       "hard-wrapped prose",
@@ -336,17 +380,14 @@ describe("findings", () => {
   });
 });
 
-test("reports every build-status line in Knowledge and its indexes, and spares design prose and code", () => {
+test("reports every build-status line in Knowledge, and spares design prose and code", () => {
   const root = project();
   write(root, {
-    "knowledge/README.md":
-      "# Knowledge\n\nRead [Chat](chat.md) before changing chat; it labels the parts not yet built.\n",
-    "knowledge/chat.md": `${doc("Chat")}\nThese decisions are implemented.\n\nStreaming has been implemented.\n\nThe parser is implemented as a state machine. The \`not implemented\` error stays.\n`,
+    "knowledge/product/chat.md": `${doc("Chat")}\nThese decisions are implemented.\n\nStreaming has been implemented.\n\nThe parser is implemented as a state machine. The \`not implemented\` error stays.\n`,
   });
   expect(messages(root, "ssot").split("\n")).toEqual([
-    'knowledge/chat.md:8: says "are implemented"; Knowledge never states how far something is built, since the Plan and the code say that; keep the design and drop the status',
-    'knowledge/chat.md:10: says "has been implemented"; Knowledge never states how far something is built, since the Plan and the code say that; keep the design and drop the status',
-    'knowledge/README.md:3: says "not yet built"; Knowledge never states how far something is built, since the Plan and the code say that; keep the design and drop the status',
+    'knowledge/product/chat.md:9: says "are implemented"; Knowledge never states how far something is built, since the Plan and the code say that; keep the design and drop the status',
+    'knowledge/product/chat.md:11: says "has been implemented"; Knowledge never states how far something is built, since the Plan and the code say that; keep the design and drop the status',
   ]);
 });
 
@@ -451,12 +492,22 @@ describe("branches and worktrees", () => {
 describe("no false findings", () => {
   test("frontmatter comments are not headings, and complete subdocs pass", () => {
     const root = project();
-    write(root, {
-      "knowledge/topic.md": doc(
+    writeIndexed(root, {
+      "knowledge/product/topic.md": doc(
         "Topic",
         "# Add subdocs when this document has children:\nsubdocs:\n  - ./topic/part.md\n",
       ),
-      "knowledge/topic/part.md": doc("Part"),
+      "knowledge/product/topic/part.md": doc("Part"),
+    });
+    expect(messages(root, "knowledge")).toBe("");
+  });
+
+  test("a category dev.yaml declares passes", () => {
+    const root = project();
+    writeIndexed(root, {
+      "dev.yaml":
+        "workspaces:\n  - .\nknowledge_categories:\n  operations: How it runs in production\n",
+      "knowledge/operations/runbook.md": doc("Runbook"),
     });
     expect(messages(root, "knowledge")).toBe("");
   });
@@ -464,8 +515,8 @@ describe("no false findings", () => {
   test("links in code, root-relative links, URLs, and anchors pass", () => {
     const root = project();
     write(root, {
-      "knowledge/README.md":
-        "# Knowledge\n\n```md\n[x](gone.md)\n```\n\n`[y](gone.md)` [Plan](/plan/README.md) [Web](https://example.com) [Top](#knowledge)\n",
+      "docs/guide.md":
+        "# Guide\n\n```md\n[x](gone.md)\n```\n\n`[y](gone.md)` [Plan](/plan/README.md) [Web](https://example.com) [Top](#guide)\n",
     });
     expect(messages(root, "links")).toBe("");
   });
@@ -473,26 +524,28 @@ describe("no false findings", () => {
   test("links to existing headings pass, as GitHub names them", () => {
     const root = project();
     write(root, {
-      "knowledge/README.md": [
-        "# Knowledge",
+      "docs/guide.md": [
+        "# Guide",
         "",
         "[a](topic.md#pages-and-localization) [b](topic.md#the-dev-next-skill-v2)",
         "[c](topic.md#setup-1) [d](topic.md#legacy) [e](topic.md#한국어-제목)",
-        "[f](topic.md#%ED%95%9C%EA%B5%AD%EC%96%B4-%EC%A0%9C%EB%AA%A9) [g](#top) [h](#knowledge)",
+        "[f](topic.md#%ED%95%9C%EA%B5%AD%EC%96%B4-%EC%A0%9C%EB%AA%A9) [g](#top) [h](#guide)",
         "[i](../plan/README.md#plan) [j](../AGENTS.md) [k](topic.md#install) [l](topic.md#top)",
         "",
       ].join("\n"),
-      "knowledge/topic.md": `${doc("Topic")}\n## Pages and localization\n\n## The \`dev-next\` skill (v2)\n\n## Setup\n\n## Setup\n\n<a id="legacy"></a>\n\n## 한국어 제목\n\n\`\`\`md\n## Not a heading\n\`\`\`\n\nInstall\n=======\n\n- not a heading\n---\n\n## Top\n`,
+      "docs/topic.md": `${doc("Topic")}\n## Pages and localization\n\n## The \`dev-next\` skill (v2)\n\n## Setup\n\n## Setup\n\n<a id="legacy"></a>\n\n## 한국어 제목\n\n\`\`\`md\n## Not a heading\n\`\`\`\n\nInstall\n=======\n\n- not a heading\n---\n\n## Top\n`,
     });
     expect(messages(root, "links")).not.toContain("matches no heading");
   });
 
   test("Knowledge reached through a directory link and subdocs passes", () => {
     const root = project();
-    write(root, {
-      "knowledge/README.md": "# Knowledge\n\nRead [the topic](topic.md).\n",
-      "knowledge/topic.md": doc("Topic", "subdocs:\n  - ./topic/part.md\n"),
-      "knowledge/topic/part.md": doc("Part"),
+    writeIndexed(root, {
+      "knowledge/product/topic.md": doc(
+        "Topic",
+        "subdocs:\n  - ./topic/part.md\n",
+      ),
+      "knowledge/product/topic/part.md": doc("Part"),
       "README.md":
         "# Project\n\n[AGENTS](AGENTS.md) [Knowledge](knowledge/) [Plan](plan/README.md)\n",
     });
@@ -542,7 +595,7 @@ describe("hard wraps", () => {
 test("each maintained document has a type; managed and generated ones are left out", () => {
   const root = project();
   write(root, {
-    "knowledge/topic.md": doc("Topic"),
+    "knowledge/product/topic.md": doc("Topic"),
     "docs/guide.md": "# Guide\n",
     "plan/nodes/leaf.md": node("leaf", "root", "explore", "todo"),
   });
@@ -553,8 +606,7 @@ test("each maintained document has a type; managed and generated ones are left o
     "AGENTS.md": "agents",
     "README.md": "readme",
     "docs/guide.md": "other",
-    "knowledge/README.md": "readme",
-    "knowledge/topic.md": "knowledge",
+    "knowledge/product/topic.md": "knowledge",
     "plan/README.md": "readme",
     "plan/nodes/leaf.md": "explore",
     "plan/nodes/root.md": "goal",

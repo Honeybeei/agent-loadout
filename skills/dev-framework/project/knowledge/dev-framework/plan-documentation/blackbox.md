@@ -28,7 +28,7 @@ For other work: observable behavior, results, examples. Images and references ar
 - <Only when other nodes use it: exact signatures, types, formats>
 
 ## Out of scope
-- <What this leaf excludes, and why>
+- <What this leaf excludes, and why> → <receiver, or `not planned`>
 
 ## Relies on
 - <Link to each Knowledge document the work must follow>
@@ -41,7 +41,7 @@ For other work: observable behavior, results, examples. Images and references ar
 - Implemented: <what was built, linking the Knowledge it implements>, <evidence such as checks and the merge>
 - Reopened: <why the implementation stopped>, <the explore leaf that holds its questions>
 - Spec gap: <what the review found missing from the node>
-- Left: <a finding the user dropped or planned as later work, with the node it went to>
+- Left: <a finding the user planned as later work or dropped> → <receiver, or `not planned`>
 ```
 
 Goal, Output, Completion criteria, Verification, and Record are required; the map script checks them. Add the other sections when they apply.

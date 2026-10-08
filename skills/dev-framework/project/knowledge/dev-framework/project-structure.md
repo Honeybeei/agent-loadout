@@ -25,7 +25,8 @@ project-root/
 ├── AGENTS.md         Agent entry point, root only, with a Framework-managed section
 ├── dev.yaml          Marks a Framework project and declares workspaces
 ├── knowledge/
-│   ├── README.md          Index of project-wide and cross-workspace Knowledge
+│   ├── README.md          Generated index of the project's Knowledge
+│   ├── <category>/        Knowledge documents, one directory per category
 │   ├── dev-framework.md   Framework-managed index of the Framework rules
 │   └── dev-framework/     Framework-managed Framework rules
 ├── plan/
@@ -36,12 +37,14 @@ project-root/
 │   └── skills/       Agent skills: Framework-managed skills and any project skills
 ├── .claude/
 │   └── skills        Link to ../.agents/skills, so Claude Code finds the same skills
+├── .dev/
+│   └── review.jsonl  Review state the Framework's scripts write, created when needed
 └── .tmp/             Temporary material, created when needed
 ```
 
 A project may contain other files and directories; the Framework does not require an `apps/`, `packages/`, or similar layout.
 
-Every path in the tree is required, except `.tmp/`, which is created when needed. A project that lacks a required path is incompletely set up. Report the gap; missing structure alone does not authorize creating files.
+Every path in the tree is required, except category directories, `.dev/`, and `.tmp/`, which are created when needed. A project that lacks a required path is incompletely set up. Report the gap; missing structure alone does not authorize creating files.
 
 ## Workspaces
 
@@ -55,20 +58,15 @@ workspaces:
   - tools/release
 ```
 
-A declared workspace:
-
-1. exists at the declared path;
-2. has a `README.md`;
-3. may have `knowledge/` for workspace-specific Knowledge. When it exists, it contains a `README.md` index that the workspace README links to.
+A declared workspace exists at the declared path and has a `README.md`. Its Knowledge lives in root `knowledge/`, as [Categories](knowledge-documentation.md#categories) says.
 
 Rules:
 
 - Only `dev.yaml` makes a directory a workspace; a README alone does not.
 - Workspaces do not nest.
-- The root can be the workspace, declared as `.`. Then `.` is the only entry, and the root README and root `knowledge/` also serve the workspace.
-- `knowledge/`, `plan/`, `.tmp/`, `.git`, `.agents/`, `.claude/`, and anything inside them cannot be declared as a workspace.
-- Put Knowledge that spans workspaces in root `knowledge/`, not in copies inside several workspaces.
-- Add fields to `dev.yaml` only when an agreed need exists.
+- The root can be the workspace, declared as `.`. Then `.` is the only entry, and the root README also serves the workspace.
+- `knowledge/`, `plan/`, `.tmp/`, `.dev/`, `.git`, `.agents/`, `.claude/`, and anything inside them cannot be declared as a workspace.
+- Add fields to `dev.yaml` only when an agreed need exists. `knowledge_categories` declares the project's own Knowledge categories.
 
 ## Temporary material
 
@@ -99,4 +97,4 @@ The Framework adds the following to a project and replaces them when the project
 
 ## Version control
 
-Keep durable project material in Git: root README and AGENTS, `dev.yaml`, `.gitignore`, workspace READMEs, Knowledge, Plan, and all Framework-managed material. Read [Git workflow](git-workflow.md) before staging, committing, merging, or pushing; keeping material in Git does not authorize those actions.
+Keep durable project material in Git: root README and AGENTS, `dev.yaml`, `.gitignore`, workspace READMEs, Knowledge, Plan, the review state in `.dev/`, and all Framework-managed material. Read [Git workflow](git-workflow.md) before staging, committing, merging, or pushing; keeping material in Git does not authorize those actions.

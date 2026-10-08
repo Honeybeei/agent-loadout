@@ -14,8 +14,8 @@ This document defines the responsibilities of README files and the root `AGENTS.
 | Document | Responsibility |
 | --- | --- |
 | Root `README.md` | Introduce the project. Link to `AGENTS.md`, every workspace README, `knowledge/README.md`, and `plan/README.md`. Contains the Framework-managed section. |
-| Workspace `README.md` | State the workspace's purpose and responsibilities. Link to its documents and rules, including its `knowledge/README.md` when that exists. |
-| `knowledge/README.md` | Index the top-level project Knowledge topics of its area. Deeper documents are reached through `subdocs`. Root `knowledge/README.md` need not list the Framework-managed index, which the managed sections link. |
+| Workspace `README.md` | State the workspace's purpose and responsibilities. Link to its documents, and to the Knowledge documents whose rules govern its code. |
+| `knowledge/README.md` | Index the project's Knowledge by category. The map script generates it, as [Knowledge documentation](knowledge-documentation.md) says. |
 | `plan/README.md` | Explain how to read the Plan and link to `plan/map.md`. It does not own goals or work records itself. |
 | Root `AGENTS.md` | Hold project-specific agent rules, such as commands, validation, and approval conditions. Name the commands that set up a development environment in a new checkout or worktree, and the automated checks that must pass before a merge. Contains the Framework-managed section. |
 

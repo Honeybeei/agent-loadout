@@ -28,13 +28,13 @@ Before writing to the Plan, read [Plan documentation](../../../knowledge/dev-fra
 4. **Choose kinds.** Recommend each leaf's kind with a one-line reason, as Goal nodes' "Choosing a leaf's kind" says. The user confirms.
 5. **Write the nodes.** Create or change each node as the Node frame and its kind's document say, with what is known, and wire `depends_on`. For each blackbox leaf, run the readiness check from Blackbox nodes; the user approves its Output and criteria. A leaf that fails becomes collaborative, or a goal that waits for an explore leaf.
 6. **Show.** Add `Planned: <what the split produced, and why>` to the goal's Record. Regenerate the map, fix any problems it lists, and show the changed part of the tree with each leaf's kind and reason.
-7. **Commit.** Offer the commit: `plan(<goal>): plan <what was added or changed>`. When a finishing leaf called this step, its own commit carries these changes instead.
+7. **Commit.** Run the commit gate, as Git workflow's [Commits](../../../knowledge/dev-framework/git-workflow.md#commits) says, then offer the commit: `plan(<goal>): plan <what was added or changed>`. When a finishing leaf called this step, its own commit carries these changes instead.
 
 ## 3. Close
 
 1. Confirm every child is `done` or `cancelled`. Otherwise, list the unfinished children and stop.
 2. Verify each of the goal's Completion criteria on the combined result in this checkout: run the automated checks that the criteria or `AGENTS.md` name, and ask the user about criteria that need judgment.
-3. When every criterion holds, tick them, add `Closed: <how the children were verified together>, <evidence>` to Record, set `done`, regenerate the map, and offer the commit: `plan(<goal>): close <title>`.
+3. When every criterion holds, tick them, add `Closed: <how the children were verified together>, <evidence>` to Record, set `done`, regenerate the map, run the commit gate, and offer the commit: `plan(<goal>): close <title>`.
 4. When a criterion does not hold, say which and why, and plan the missing work as a new child through step 2; the goal stays `open`.
 
 Then follow [dev-next](../dev-next/SKILL.md).

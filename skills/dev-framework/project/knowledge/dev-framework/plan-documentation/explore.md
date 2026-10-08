@@ -25,16 +25,16 @@ An explore leaf is wayfinding: it turns low-resolution ideas, concepts, flows, a
 - [task] <Work that must happen before a question can be answered> (blocked by: <ticket>)
 
 ## Decisions so far
-- <Question gist> → <answer gist>
+- <Question> → <answer>, <date>, over <alternatives, if any> → <owner, once the rule moves>
 
 ## For the Plan
-- <A topic with its own destination, or other input for planning>
+- <A topic with its own destination, or other input for planning> → <receiver, once planned>
 
 ## Not yet specified
 - <In scope, but cannot be phrased as a question yet>
 
 ## Out of scope
-- <Ruled out of this explore, and why>
+- <Ruled out of this explore, and why> → <receiver, or `not planned`>
 
 ## Record
 - Finished: <where the decisions went>, <what planning changed>

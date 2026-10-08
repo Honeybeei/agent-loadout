@@ -15,10 +15,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import {
+  END,
+  START,
+} from "../project/.agents/skills/dev-framework/scripts/check.ts";
+
+export { END, START };
 
 export const SOURCE = resolve(import.meta.dir, "../project");
-export const START = "<!-- dev-framework:start -->";
-export const END = "<!-- dev-framework:end -->";
 const MANIFEST = ".agents/skills/dev-framework/managed.txt";
 const MANAGED_PATH =
   /^(?:knowledge\/dev-framework(?:\.md)?|\.agents\/skills\/[a-z0-9]+(?:-[a-z0-9]+)*)$/;

@@ -10,7 +10,9 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  CATEGORIES,
   countOpenTickets,
+  knowledgeIndex,
   loadPlan,
   orderSteps,
   renderHtml,
@@ -682,6 +684,96 @@ describe("loadPlan problems", () => {
       "c: names .tmp/research/stack.md in .tmp/, which may be deleted; move what later work needs into the node or Knowledge, and remove the path",
     ]);
   });
+
+  test("a handed-off line in a goal or a done leaf links its receiver or says not planned", () => {
+    const root = project({
+      root: goal("Product", null).replace(
+        "## Goal\nA goal.\n",
+        "## Goal\nA goal.\n\n## Out of scope\n- Mobile apps: not planned, desktop only.\n- Settings: [Settings](settings.md) builds them.\n- Signing: someone builds it.\n- Login: [Login](login.md) was dropped.\n",
+      ),
+      settings: leaf("Settings", "root", "collaborative", "todo"),
+      login: leaf("Login", "root", "collaborative", "cancelled"),
+      a: leaf(
+        "A",
+        "root",
+        "explore",
+        "done",
+        "\n## For the Plan\n- Pricing: the [glossary](../../knowledge/glossary.md) holds it.\n- Onboarding: the features that need it.\n",
+      ),
+      b: leaf(
+        "B",
+        "root",
+        "explore",
+        "todo",
+        "\n## Out of scope\n- Theme switching.\n",
+      ),
+    });
+    mkdirSync(join(root, "knowledge"));
+    writeFileSync(join(root, "knowledge", "glossary.md"), "# Glossary\n");
+    const rule =
+      "names no receiver; link the node that holds it, not a cancelled one, or the Knowledge document, or say `not planned`, as Recording decisions in knowledge/dev-framework/plan-documentation.md says";
+    expect(loadPlan(root).errors).toEqual([
+      `a: the For the Plan line "Onboarding: the features that need it." ${rule}`,
+      `root: the Out of scope line "Signing: someone builds it." ${rule}`,
+      `root: the Out of scope line "Login: [Login](login.md) was dropped." ${rule}`,
+    ]);
+  });
+
+  test("every edit to a Goal in Git needs a Goal changed line", () => {
+    const root = project({
+      root: goal("Product", null),
+      a: leaf("A", "root", "explore", "todo"),
+    });
+    const git = (...args: string[]) =>
+      Bun.spawnSync(["git", "-C", root, ...args], {
+        env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", HOME: root },
+      });
+    git("init", "-q", "-b", "main");
+    git("config", "user.name", "Test");
+    git("config", "user.email", "test@example.com");
+    git("add", "-A");
+    git("commit", "-q", "-m", "Plan");
+    const path = join(root, "plan", "nodes", "a.md");
+    writeFileSync(
+      path,
+      readFileSync(path, "utf8").replace("A goal.", "A wider goal."),
+    );
+    expect(loadPlan(root).errors).toEqual([
+      'a: its Goal has had 2 versions in Git, but Record has 0 "Goal changed:" lines; add one for each edit, quoting the Goal before it, as Node frame in knowledge/dev-framework/plan-documentation.md says. Earlier Goals, oldest first: "A goal."',
+    ]);
+    writeFileSync(
+      path,
+      readFileSync(path, "utf8").replace(
+        "## Record\n",
+        "## Record\n- Goal changed: A goal., the scope grew.\n",
+      ),
+    );
+    git("commit", "-q", "-am", "Widen");
+    // Reflowing a Goal is not an edit.
+    writeFileSync(
+      path,
+      readFileSync(path, "utf8").replace("A wider goal.", "A\n  wider goal."),
+    );
+    expect(loadPlan(root).errors).toEqual([]);
+  });
+
+  test("a done explore leaf dates each decision", () => {
+    const errors = loadPlan(
+      project({
+        root: goal("Product", null),
+        a: leaf(
+          "A",
+          "root",
+          "explore",
+          "done",
+          "\n## Decisions so far\n- Which stack → Astro, 2026-10-01, over Next.js\n- Where it runs → Cloudflare\n",
+        ),
+      }),
+    ).errors;
+    expect(errors).toEqual([
+      'a: the decision "Where it runs → Cloudflare" has no date; add the date the user approved it, as Recording decisions in knowledge/dev-framework/plan-documentation.md says',
+    ]);
+  });
 });
 
 describe("temporaryPaths", () => {
@@ -767,5 +859,112 @@ describe("command line", () => {
     expect(result.err).toContain("Plan problems:");
     expect(() => readFileSync(join(root, "plan", "map.md"))).toThrow();
     expect(existsSync(join(root, ".tmp"))).toBe(false);
+  });
+});
+
+describe("knowledgeIndex", () => {
+  const doc = (title: string, readWhen: string, topics: string[], more = "") =>
+    `---\ncanonical_for:\n${topics.map((t) => `  - ${t}\n`).join("")}read_when: ${readWhen}\n${more}---\n\n# ${title}\n`;
+  const knowledge = (root: string, files: Record<string, string>) => {
+    for (const [path, text] of Object.entries(files)) {
+      mkdirSync(join(root, "knowledge", path, ".."), { recursive: true });
+      writeFileSync(join(root, "knowledge", path), text);
+    }
+  };
+
+  test("lists each category's documents with read_when and canonical_for, subdocuments indented", () => {
+    const root = project({ root: goal("Product", null) });
+    knowledge(root, {
+      "glossary.md": doc("Glossary", "before naming things", ["Terms"]),
+      "dev-framework.md": "# Dev Framework rules\n",
+      "architecture/persistence.md": doc(
+        "Persistence",
+        "before changing storage.",
+        ["Persistence", "Backups policy"],
+        "subdocs:\n  - ./persistence/backups.md\n",
+      ),
+      "architecture/persistence/backups.md": doc(
+        "Backups",
+        "before changing backups",
+        ["Backups"],
+      ),
+      "product/chat.md": doc("Chat", "when adding chat text", ["Chat"]),
+    });
+    expect(knowledgeIndex(root)).toEqual({
+      errors: [],
+      text: [
+        "# Knowledge",
+        "",
+        "The project's Knowledge by category, generated by the map script from each document's `read_when` and `canonical_for`; never edit it by hand. [Knowledge documentation](dev-framework/knowledge-documentation.md#categories) defines the categories.",
+        "",
+        "- [Glossary](glossary.md): read before naming things. Owns: Terms.",
+        "- [Dev Framework rules](dev-framework.md): read before working, as `AGENTS.md` says. The Framework manages them.",
+        "",
+        "## Product",
+        "",
+        "What it must do, and why: purpose, behavior, API contracts.",
+        "",
+        "- [Chat](product/chat.md): read when adding chat text. Owns: Chat.",
+        "",
+        "## Architecture",
+        "",
+        "How it is structured: components, boundaries, state, technology.",
+        "",
+        "- [Persistence](architecture/persistence.md): read before changing storage. Owns: Persistence; Backups policy.",
+        "  - [Backups](architecture/persistence/backups.md): read before changing backups. Owns: Backups.",
+        "",
+      ].join("\n"),
+    });
+  });
+
+  test("reports documents outside categories, undeclared categories, a README in a category, and a missing read_when", () => {
+    const root = project({ root: goal("Product", null) });
+    writeFileSync(
+      join(root, "dev.yaml"),
+      "workspaces:\n  - .\nknowledge_categories:\n  operations: How it runs in production\n",
+    );
+    knowledge(root, {
+      "mlp-definition.md": doc("MLP", "before x", ["MLP"]),
+      "notes/a.md": doc("A", "before a", ["A"]),
+      "operations/runbook.md": doc("Runbook", "before deploying", ["Runbook"]),
+      "product/README.md": "# Product\n",
+      "product/chat.md": "---\ncanonical_for:\n  - Chat\n---\n\n# Chat\n",
+    });
+    expect(knowledgeIndex(root).errors.map((e) => e.split(";")[0])).toEqual([
+      "knowledge/mlp-definition.md: move it, with any subdocuments, into the category whose question it answers, as knowledge/<category>/mlp-definition.md, and update its incoming links, as Categories in knowledge/dev-framework/knowledge-documentation.md says",
+      "knowledge/notes/ is not a category",
+      "knowledge/product/README.md: a category holds only documents, and knowledge/README.md is the index",
+      'knowledge/product/chat.md: frontmatter needs read_when, the tasks to read it before, such as "before changing persistence behavior"',
+    ]);
+  });
+
+  test("the categories match the table in Knowledge documentation", () => {
+    const rules = readFileSync(
+      join(
+        import.meta.dir,
+        "../project/knowledge/dev-framework/knowledge-documentation.md",
+      ),
+      "utf8",
+    );
+    const table = Object.fromEntries(
+      [...rules.matchAll(/^\| `([a-z-]+)\/` \| (.+) \|$/gm)].map((m) => [
+        m[1],
+        m[2],
+      ]),
+    );
+    expect(table).toEqual(CATEGORIES);
+  });
+
+  test("the command line writes the index beside the map, and --check reports it stale", () => {
+    const root = project(sample);
+    knowledge(root, {
+      "product/chat.md": doc("Chat", "before chat", ["Chat"]),
+    });
+    expect(run(root).out).toContain("Wrote knowledge/README.md");
+    expect(run(root, "--check")).toMatchObject({ code: 0 });
+    knowledge(root, {
+      "product/files.md": doc("Files", "before files", ["Files"]),
+    });
+    expect(run(root, "--check")).toMatchObject({ code: 1 });
   });
 });
