@@ -47,7 +47,7 @@ The `resolve-feedback` skill in `.agents/skills/` works through reports this way
 
 ## Applying to projects
 
-Editing this repository changes no project. `dev-framework apply` writes into a project, so run it only when the user asks for that apply, and only in the project they name.
+Editing this repository changes no project and no installed command. `bun run setup` writes the command into the user's directories, and `dev-framework apply` writes into a project, so run each only when the user asks for it, and apply only in the project they name.
 
 ## Tooling
 
