@@ -23,6 +23,8 @@ export { END, START };
 
 export const REPO = resolve(import.meta.dir, "..");
 export const SOURCE = join(REPO, "project");
+/** The source an installed snapshot was built from, which `bun run install` writes beside it. */
+export const INSTALLED_SOURCE = "source.json";
 /** What the last apply wrote: the source it came from and the managed paths. */
 export const RECORD = ".dev/framework.json";
 // The managed-path list that syncs before the record kept.
@@ -125,8 +127,11 @@ function git(root: string, args: string[]): string {
   return result.stdout;
 }
 
-/** The commit of this repository that an apply copies from. */
+/** The commit an apply copies from: the installed snapshot's, or this checkout's. */
 export function sourceState(): Source {
+  const installed = join(REPO, INSTALLED_SOURCE);
+  if (existsSync(installed))
+    return JSON.parse(readFileSync(installed, "utf8")) as Source;
   const run = (...args: string[]) =>
     spawnSync("git", ["-C", REPO, ...args], { encoding: "utf8" }).stdout.trim();
   return {

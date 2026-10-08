@@ -10,13 +10,15 @@ A harness finds the skills in the project: Pi and Codex read `.agents/skills/`, 
 
 ## Install
 
-Requirements: Bun 1.3.14 and Git. Clone this repository anywhere, and link the command into a directory on your `PATH`:
+Requirements: Bun 1.3.14 and Git. Clone this repository anywhere, then run, on a clean `main`:
 
 ```bash
-ln -s "$PWD/bin/dev-framework" ~/.local/bin/dev-framework
+bun run setup   # or: bun setup
 ```
 
-The command copies from this checkout, so it applies only a clean `main` unless told otherwise.
+It pulls `main`, builds a snapshot of the command and the Framework in `${XDG_DATA_HOME:-~/.local/share}/dev-framework/`, and writes the `dev-framework` command into Bun's bin directory, `~/.bun/bin` unless `BUN_INSTALL` says otherwise, which Bun's installer puts on `PATH`. Run it again to update. The command applies the snapshot, so editing this checkout or switching its branch changes nothing until the next setup.
+
+To try a change before merging it, run the command from this checkout in the project: `bun <this checkout>/cli/main.ts apply --allow-unmerged`.
 
 ## Usage
 
@@ -31,7 +33,7 @@ Run it at the root of the project's main checkout:
 
 Apply copies the managed material, links `.claude/skills` to `../.agents/skills`, records the source commit and the managed paths in `.dev/framework.json`, and regenerates the Plan map and the Knowledge index. It refuses to overwrite uncommitted work, and commits nothing. It also refuses, until the matching option overrides it:
 
-- a source checkout that is not a clean `main` (`--allow-unmerged`);
+- a source that is not a clean `main`, which only a run from this checkout can have (`--allow-unmerged`);
 - a blackbox or collaborative leaf in progress, which runs under the current rules (`--allow-running`).
 
 Then reload the harness, so it loads the new skills, and run `dev-doctor` in the project. It finishes an adoption, migrates records written for an earlier Framework, checks the project against the rules, and proposes the commit.
@@ -65,10 +67,9 @@ dev-framework/
 ├── .claude/skills       Link to ../.agents/skills, for Claude Code
 ├── AGENTS.md            Rules for developing this repository
 ├── README.md
-├── bin/dev-framework    The command; runs cli/main.ts
 ├── cli/                 The command's source and tests
 ├── project/             Mirrors a project root; copied into Framework projects
-├── scripts/             Size report and repository tests
+├── scripts/             The setup script, the size report, and repository tests
 └── tests/               Tests of the scripts copied into projects
 ```
 
@@ -93,7 +94,7 @@ The scripts need only Bun. Their tests live in `tests/`, outside `project/`, so 
 ## Changing the Framework
 
 1. Edit the files here, then run `bun run lint`, `bun run typecheck`, and `bun run test`.
-2. Merge into `main`.
+2. Merge into `main`, and run `bun run setup`.
 3. Run `dev-framework apply` and then `dev-doctor` in each Framework project.
 
 ## Sources
