@@ -1,6 +1,7 @@
-// Diagnoses a project against the installed Dev Framework. It changes nothing.
-// Usage: bun check.ts [project-root] [--group <id>[,<id>...]|all]
+// Checks a project against the rules of its copy of the Dev Framework. It changes nothing.
+// Usage: bun check.ts [project-root] [--group <id>[,<id>...]]
 // Each message names the rule broken and the fix. What only judgment can settle goes to review.ts.
+// dev-doctor's diagnosis adds the managed material and leftovers of earlier Frameworks.
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -25,8 +26,7 @@ import {
   type PlanNode,
   renderMap,
   temporaryPaths,
-} from "../project/.agents/skills/dev-framework/scripts/map.ts";
-import { planSync } from "./sync.ts";
+} from "./map.ts";
 
 // The groups that script findings are reported in, in order.
 export const GROUPS = [
@@ -37,15 +37,15 @@ export const GROUPS = [
   "ssot",
   "links",
   "writing",
-  "leftovers",
 ] as const;
 export type Group = (typeof GROUPS)[number];
-export type Area = "managed" | Group;
-export type State = "not adopted" | "outdated" | "current";
 export interface Finding {
-  area: Area;
+  area: Group;
   message: string;
 }
+/** The lines that open and close a Framework-managed section of README.md or AGENTS.md. */
+export const START = "<!-- dev-framework:start -->";
+export const END = "<!-- dev-framework:end -->";
 /** What a maintained document is, which decides the rules a review judges it against. */
 export type DocumentType =
   | "agents"
@@ -60,7 +60,7 @@ export interface Document {
   path: string;
   type: DocumentType;
 }
-type Add = (area: Area, message: string) => void;
+type Add = (area: Group, message: string) => void;
 
 const REQUIRED = [
   "README.md",
@@ -69,7 +69,15 @@ const REQUIRED = [
   "plan/README.md",
   "plan/map.md",
 ];
-const RESERVED = ["knowledge", "plan", ".tmp", ".git", ".agents", ".claude"];
+const RESERVED = [
+  "knowledge",
+  "plan",
+  ".tmp",
+  ".dev",
+  ".git",
+  ".agents",
+  ".claude",
+];
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MANAGED_DOCUMENT = /^knowledge\/dev-framework(?:\.md$|\/)/;
 // Progress wording that Knowledge must not hold.
@@ -85,9 +93,6 @@ export const BUILD_STATUS = new RegExp(
   ].join("|"),
   "i",
 );
-// Skills that earlier Framework versions put into projects.
-const OLD_SKILL =
-  /^(?:dev-check(?:-[a-z-]+)?|dev-conformance|dev-cycle|dev-framework-report|dev-init|dev-ssot|dev-update|development-cycle|inspect-project)$/;
 
 function git(root: string, args: string[]) {
   return spawnSync("git", ["-C", root, ...args], { encoding: "utf8" });
@@ -534,8 +539,8 @@ export function hardWraps(text: string): number[] {
   return found;
 }
 
-export function diagnose(projectRoot: string): {
-  state: State;
+/** The findings of every group, and the documents a review judges; none without dev.yaml but misplaced instruction files. */
+export function check(projectRoot: string): {
   findings: Finding[];
   documents: Document[];
 } {
@@ -571,25 +576,7 @@ export function diagnose(projectRoot: string): {
         `${path}: AGENTS.md is the only instruction file; move its rules into the root AGENTS.md, outside the managed section, then delete it`,
       );
   }
-  const sync = planSync(root);
-  for (const problem of sync.problems)
-    add("managed", `blocks sync: ${problem}`);
-  if (!exists("dev.yaml"))
-    return { state: "not adopted", findings, documents: [] };
-  for (const change of sync.changes)
-    add(
-      "managed",
-      `sync would ${change.action} ${change.path}${change.note ? `: ${change.note}` : ""}`,
-    );
-  if (
-    lstatSync(join(root, ".claude/skills"), { throwIfNoEntry: false }) &&
-    git(root, ["ls-files", "--", ".claude/skills"]).stdout === ""
-  )
-    add("managed", ".claude/skills is not in Git; commit the link");
-  const state: State =
-    sync.changes.length > 0 || sync.problems.length > 0
-      ? "outdated"
-      : "current";
+  if (!exists("dev.yaml")) return { findings, documents: [] };
 
   // Structure
   for (const path of REQUIRED)
@@ -771,20 +758,6 @@ export function diagnose(projectRoot: string): {
       );
   }
 
-  // Leftovers
-  if (exists("plan/map.yaml"))
-    add(
-      "leftovers",
-      "plan/map.yaml is from an earlier Framework; move what the project still needs into the Plan, Knowledge, or AGENTS.md, then delete it",
-    );
-  if (isDirectory(join(root, ".agents/skills")))
-    for (const name of readdirSync(join(root, ".agents/skills")).sort())
-      if (OLD_SKILL.test(name))
-        add(
-          "leftovers",
-          `.agents/skills/${name} is from an earlier Framework; move what the project still needs into the Plan, Knowledge, or AGENTS.md, then delete it`,
-        );
-
   const typeOf = (path: string): DocumentType => {
     const node = /^plan\/nodes\/([^/]+)\.md$/.exec(path)?.[1];
     if (node !== undefined) return plan.nodes.get(node)?.kind ?? "other";
@@ -793,61 +766,32 @@ export function diagnose(projectRoot: string): {
     return knowledge.includes(path) ? "knowledge" : "other";
   };
   return {
-    state,
     findings,
     documents: documents.map((path) => ({ path, type: typeOf(path) })),
   };
 }
 
-const USAGE = "Usage: bun check.ts [project-root] [--group <id>[,<id>...]|all]";
-
-function print(title: string, lines: string[]): void {
-  console.log(`\n${title}\n${lines.map((line) => `- ${line}`).join("\n")}`);
-}
+const USAGE = "Usage: bun check.ts [project-root] [--group <id>[,<id>...]]";
 
 if (import.meta.main) {
   const args = process.argv.slice(2);
   const at = args.indexOf("--group");
-  const groupArgument = at < 0 ? undefined : (args[at + 1] ?? "");
+  const selected = at < 0 ? [...GROUPS] : (args[at + 1] ?? "").split(",");
   const positional =
     at < 0 ? args : [...args.slice(0, at), ...args.slice(at + 2)];
-  const selected =
-    groupArgument === "all" ? [...GROUPS] : groupArgument?.split(",");
   if (
     positional.length > 1 ||
     positional.some((arg) => arg.startsWith("--")) ||
-    selected?.some((id) => !(GROUPS as readonly string[]).includes(id))
+    selected.some((id) => !(GROUPS as readonly string[]).includes(id))
   ) {
     console.error(`${USAGE}\nGroups: ${GROUPS.join(", ")}`);
     process.exit(2);
   }
-  const root = resolve(positional[0] ?? ".");
-  const { state, findings } = diagnose(root);
-  const messages = (area: Area) =>
-    findings.filter((f) => f.area === area).map((f) => f.message);
-  console.log(`State: ${state}`);
-
-  if (selected === undefined) {
-    // The diagnosis: managed material, what blocks adoption, and counts per group.
-    const shown =
-      state === "not adopted" ? ["managed", ...GROUPS] : ["managed"];
-    for (const area of shown as Area[])
-      if (messages(area).length > 0)
-        print(area === "managed" ? "Managed material" : area, messages(area));
-    if (state === "current")
-      print(
-        "Groups",
-        GROUPS.map((group) => `${group}: ${messages(group).length}`),
-      );
-    process.exit(state === "current" && findings.length === 0 ? 0 : 1);
+  const { findings } = check(resolve(positional[0] ?? "."));
+  for (const group of selected) {
+    const found = findings.filter((f) => f.area === group);
+    console.log(`${group}: ${found.length} findings`);
+    for (const { message } of found) console.log(`- ${message}`);
   }
-
-  for (const group of selected as Group[]) {
-    const found = messages(group);
-    console.log(`\n${group}: ${found.length} findings`);
-    for (const message of found) console.log(`- ${message}`);
-  }
-  process.exit(
-    findings.some((f) => (selected as string[]).includes(f.area)) ? 1 : 0,
-  );
+  process.exit(findings.some((f) => selected.includes(f.area)) ? 1 : 0);
 }

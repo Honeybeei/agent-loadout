@@ -4,7 +4,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import {
   anchors,
   markdownLinks,
-} from "../skills/dev-framework/scripts/check.ts";
+} from "../skills/dev-framework/project/.agents/skills/dev-framework/scripts/check.ts";
 import { REPO } from "./apply.ts";
 
 // Every relative link in the repository's Markdown must point at a file or directory that exists,

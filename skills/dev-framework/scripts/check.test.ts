@@ -8,15 +8,16 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import { hardWraps } from "../project/.agents/skills/dev-framework/scripts/check.ts";
 import {
   knowledgeIndex,
   loadPlan,
   renderMap,
 } from "../project/.agents/skills/dev-framework/scripts/map.ts";
-import { type Area, diagnose, hardWraps } from "./check.ts";
+import { type Area, diagnose } from "./doctor.ts";
 import { planSync } from "./sync.ts";
 
-const CHECK = join(import.meta.dir, "check.ts");
+const CHECK = join(import.meta.dir, "doctor.ts");
 const roots: string[] = [];
 
 afterEach(() => {

@@ -27,4 +27,5 @@ Run on `main` in the main checkout. When a blackbox or collaborative leaf is `in
    | Plan: nodes without `kind` | Start a new Plan, as Propose says |
    | Links to paths an earlier Framework used | Point them to `knowledge/dev-framework/` |
    | Build status in Knowledge, which an earlier Framework asked for | Remove it. The Implemented line of each done implementation leaf links the Knowledge it implements instead. |
+   | `.tmp/doctor/findings.md`, which an earlier Framework kept | Nothing reads it now; the next review records its findings in `.dev/review.jsonl`. Delete it once that review has run. |
    | Knowledge outside a category, or in a workspace's `knowledge/` | Recommend a category for each document by the question it answers, and a name without a milestone. Commit the moves before splitting a mixed document, so Git keeps each file's history. |

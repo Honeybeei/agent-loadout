@@ -47,7 +47,8 @@ Starting an implementation leaf: set it `in_progress` on `main` and commit, then
 | `impl/<node>`, blackbox | One verified slice | None: the branch stays disposable until review |
 | `impl/<node>`, collaborative | One slice the user reviewed | Ask together with the slice review |
 
-- Commit only the files the step wrote, by path. Leave other changes and the staging area as they are. A declined commit stays uncommitted.
+- Before a commit on `main` that changes Plan or Knowledge, run the [commit gate](../../.agents/skills/dev-framework/review.md#commit-gate): the Framework checks and a defect review of the change, whose findings in text the change wrote are fixed before the commit. Commits that adopt or update the Framework skip it.
+- Commit only the files the step wrote, by path, with the review state `.dev/review.jsonl` the gate updated. Leave other changes and the staging area as they are. A declined commit stays uncommitted.
 - Write commit messages in English, in the Conventional Commits form `<type>(<scope>): <subject>`.
 - A commit of a step that changes the Plan follows one pattern: `plan(<node>): <what happened>`, with the node the step is about as the scope. For example, `plan(web-service): plan three leaves and an explore`. `git log --grep '^plan('` then reads as the project's history of decisions and work. Commits that adopt or update the Framework, or bring the project in line with it, use `chore:`.
 - Code commits on `impl/<node>` follow the project's convention in `AGENTS.md`, or Conventional Commits types such as `feat` and `fix` when it has none.

@@ -37,12 +37,14 @@ project-root/
 │   └── skills/       Agent skills: Framework-managed skills and any project skills
 ├── .claude/
 │   └── skills        Link to ../.agents/skills, so Claude Code finds the same skills
+├── .dev/
+│   └── review.jsonl  Review state the Framework's scripts write, created when needed
 └── .tmp/             Temporary material, created when needed
 ```
 
 A project may contain other files and directories; the Framework does not require an `apps/`, `packages/`, or similar layout.
 
-Every path in the tree is required, except category directories and `.tmp/`, which are created when needed. A project that lacks a required path is incompletely set up. Report the gap; missing structure alone does not authorize creating files.
+Every path in the tree is required, except category directories, `.dev/`, and `.tmp/`, which are created when needed. A project that lacks a required path is incompletely set up. Report the gap; missing structure alone does not authorize creating files.
 
 ## Workspaces
 
@@ -63,7 +65,7 @@ Rules:
 - Only `dev.yaml` makes a directory a workspace; a README alone does not.
 - Workspaces do not nest.
 - The root can be the workspace, declared as `.`. Then `.` is the only entry, and the root README also serves the workspace.
-- `knowledge/`, `plan/`, `.tmp/`, `.git`, `.agents/`, `.claude/`, and anything inside them cannot be declared as a workspace.
+- `knowledge/`, `plan/`, `.tmp/`, `.dev/`, `.git`, `.agents/`, `.claude/`, and anything inside them cannot be declared as a workspace.
 - Add fields to `dev.yaml` only when an agreed need exists. `knowledge_categories` declares the project's own Knowledge categories.
 
 ## Temporary material
@@ -95,4 +97,4 @@ The Framework adds the following to a project and replaces them when the project
 
 ## Version control
 
-Keep durable project material in Git: root README and AGENTS, `dev.yaml`, `.gitignore`, workspace READMEs, Knowledge, Plan, and all Framework-managed material. Read [Git workflow](git-workflow.md) before staging, committing, merging, or pushing; keeping material in Git does not authorize those actions.
+Keep durable project material in Git: root README and AGENTS, `dev.yaml`, `.gitignore`, workspace READMEs, Knowledge, Plan, the review state in `.dev/`, and all Framework-managed material. Read [Git workflow](git-workflow.md) before staging, committing, merging, or pushing; keeping material in Git does not authorize those actions.

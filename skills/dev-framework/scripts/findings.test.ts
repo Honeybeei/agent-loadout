@@ -1,16 +1,26 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import {
-  addFindings,
-  FINDINGS,
-  type Findings,
-  parseFindings,
-  renderFindings,
-} from "./findings.ts";
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { parseReport } from "../project/.agents/skills/dev-framework/scripts/findings.ts";
+import {
+  knowledgeIndex,
+  loadPlan,
+  renderMap,
+} from "../project/.agents/skills/dev-framework/scripts/map.ts";
+import { readState } from "../project/.agents/skills/dev-framework/scripts/state.ts";
+import { planSync } from "./sync.ts";
 
-const SCRIPT = join(import.meta.dir, "findings.ts");
+const SCRIPTS = join(
+  import.meta.dir,
+  "../project/.agents/skills/dev-framework/scripts",
+);
 const roots: string[] = [];
 
 afterEach(() => {
@@ -18,151 +28,230 @@ afterEach(() => {
     rmSync(root, { recursive: true, force: true });
 });
 
-const report = `I judged two documents.
+function write(root: string, files: Record<string, string>) {
+  for (const [path, content] of Object.entries(files)) {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), content);
+  }
+}
 
-## 1 · defect
+function git(root: string, ...args: string[]) {
+  const result = Bun.spawnSync(["git", "-C", root, ...args], {
+    env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", HOME: root },
+  });
+  if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+}
 
-- File: knowledge/ipc.md:17
-- Quote: Desktop IPC does not say how the frontend follows state.
-- Rule: knowledge/dev-framework/readme-agents-guideline.md#navigation
-- Problem: The reason to read the link is now false.
-- Fix: Say that IPC says how the frontend follows state.
+const doc = (title: string, body = "") =>
+  `---\ncanonical_for:\n  - ${title}\nread_when: before changing ${title}\n---\n\n# ${title}\n${body}`;
 
-## 2 · polish
+/** An adopted project with two Knowledge documents, one with a lead, committed. */
+function project(): string {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "dev-findings-")));
+  roots.push(root);
+  git(root, "init", "-q", "-b", "main");
+  git(root, "config", "user.name", "Test");
+  git(root, "config", "user.email", "test@example.com");
+  write(root, {
+    ".gitignore": "/.tmp/\n",
+    "dev.yaml": "workspaces:\n  - .\n",
+    "README.md":
+      "# Project\n\nRead [AGENTS](AGENTS.md), [Knowledge](knowledge/README.md), and [Plan](plan/README.md).\n",
+    "knowledge/glossary.md": doc(
+      "Glossary",
+      "\n- **Desktop core**: the crate. Avoid: engine.\n",
+    ),
+    "knowledge/product/chat.md": doc("Chat", "\nThe engine streams answers.\n"),
+    "knowledge/product/files.md": doc("Files", "\nFiles are kept.\n"),
+    "plan/README.md": "# Plan\n\nRead the [map](map.md).\n",
+    "plan/nodes/root.md":
+      "---\ntitle: root\nparent: null\ndepends_on: []\nkind: goal\nstatus: open\n---\n\n# root\n\n## Goal\nA goal.\n",
+  });
+  for (const change of planSync(root).changes) change.apply(root);
+  write(root, {
+    "plan/map.md": renderMap(loadPlan(root)),
+    "knowledge/README.md": knowledgeIndex(root).text ?? "",
+  });
+  git(root, "add", "-A");
+  git(root, "commit", "-q", "-m", "Adopt");
+  return root;
+}
 
-- File: knowledge/ipc.md:30
-- Quote: It is the case that commands are sent.
-- Rule: knowledge/dev-framework/writing-rules.md#documentation-style
-- Problem: Wordy.
-- Fix: Commands are sent.
+function run(root: string, script: string, args: string[], input = "") {
+  const result = Bun.spawnSync(["bun", join(SCRIPTS, script), root, ...args], {
+    stdin: new TextEncoder().encode(input),
+  });
+  return {
+    code: result.exitCode,
+    out: result.stdout.toString(),
+    err: result.stderr.toString(),
+  };
+}
 
-## Verdicts
+const finding = (n: number, file: string, extra = "") =>
+  `## ${n} · defect\n\n- File: ${file}\n- Quote: The engine streams answers.\n- Rule: knowledge/dev-framework/knowledge-documentation.md#glossary\n- Problem: It uses a word the glossary avoids.\n- Failure: An agent reads "engine" as a second component.\n- Evidence: knowledge/glossary.md says to avoid "engine".\n- Fix: Say "desktop core".\n${extra}`;
 
-- writing-rules.md#documentation-style: 2
-`;
+describe("parseReport", () => {
+  test("reads findings, leads, and verdicts", () => {
+    const report = parseReport(
+      `I judged it.\n\n${finding(1, "`knowledge/product/chat.md:9`.")}\n## Leads\n\n- 1a2b3c4d: finding 1\n- 5e6f7a8b: not a finding: a library's name\n\n## Verdicts\n\n- knowledge/product/chat.md: findings 1\n- knowledge/product/files.md: holds\n`,
+      "defect",
+    );
+    expect(report.errors).toEqual([]);
+    expect(report.findings.get(1)).toMatchObject({
+      file: "knowledge/product/chat.md:9",
+      failure: 'An agent reads "engine" as a second component.',
+    });
+    expect([...report.leads]).toEqual([
+      ["1a2b3c4d", "finding 1"],
+      ["5e6f7a8b", "not a finding: a library's name"],
+    ]);
+    expect(report.verdicts.get("knowledge/product/files.md")).toBe("holds");
+  });
 
-describe("parseFindings", () => {
-  test("reads each block and ignores the verdicts", () => {
-    const { findings, errors } = parseFindings(report);
-    expect(errors).toEqual([]);
-    expect(findings.map((f) => [f.severity, f.status, f.file])).toEqual([
-      ["defect", "proposed", "knowledge/ipc.md:17"],
-      ["polish", "proposed", "knowledge/ipc.md:30"],
+  test("a defect without Failure and Evidence is refused as polish", () => {
+    const { errors } = parseReport(
+      "## 1 · defect\n\n- File: a.md:1\n- Quote: x\n- Rule: r\n- Problem: p\n- Fix: f\n",
+      "defect",
+    );
+    expect(errors).toEqual([
+      '"1 · defect" lacks Failure, Evidence; a defect shows who, following the text, acts wrongly, and the evidence, or it is polish',
     ]);
   });
 
-  test("reads a value that goes on in indented lines, and ends it at the next unindented line", () => {
-    const text =
-      "## 1 · defect\n\n- File: a.md:1; b.md:2\n- Quote: x\n- Rule: r\n- Problem: Two READMEs lack links:\n  - a.md lacks one.\n- Fix:\n  - In both, add the link.\n\nNot part of the finding.\n";
-    const [finding] = parseFindings(text).findings;
-    expect(finding?.problem).toBe(
-      "Two READMEs lack links:\n  - a.md lacks one.",
+  test("reads a value that goes on in indented lines", () => {
+    const { findings } = parseReport(
+      "## 1 · polish\n\n- File: a.md:1\n- Quote: x\n- Rule: r\n- Problem: Two lines:\n  - one.\n- Fix: f\n\nNot part of it.\n",
+      "polish",
     );
-    expect(finding?.fix).toBe("\n  - In both, add the link.");
-    const data: Findings = { commit: "", review: "", findings: [] };
-    addFindings(data, finding ? [finding] : []);
-    const rendered = renderFindings(data);
-    expect(rendered).toContain("- Fix:\n  - In both, add the link.\n");
-    expect(parseFindings(rendered).findings).toEqual(data.findings);
-  });
-
-  test("reads a path in a code span or at the end of a sentence", () => {
-    const block = (file: string) =>
-      `## 1 · defect\n- File: ${file}\n- Quote: q\n- Rule: r\n- Problem: p\n- Fix: f\n`;
-    for (const file of ["`plan/nodes/x.md:12`", "plan/nodes/x.md:12."])
-      expect(parseFindings(block(file)).findings[0]?.file).toBe(
-        "plan/nodes/x.md:12",
-      );
-  });
-
-  test("names a block that lacks a field", () => {
-    expect(
-      parseFindings("## 1 · defect\n\n- File: a.md:1\n- Rule: x\n").errors,
-    ).toEqual(['"1 · defect" lacks Quote, Problem, Fix']);
-  });
-
-  test("reads back what it renders", () => {
-    const data: Findings = {
-      commit: "abc1234",
-      review: "defect, every document",
-      findings: [],
-    };
-    addFindings(data, parseFindings(report).findings);
-    const text = renderFindings(data);
-    expect(parseFindings(text).findings).toEqual(data.findings);
-    expect(text).toContain("## F2 · polish · proposed\n");
+    expect(findings.get(1)?.problem).toBe("Two lines:\n  - one.");
   });
 });
 
-test("addFindings skips a problem already in the file, on whatever line", () => {
-  const data: Findings = { commit: "", review: "", findings: [] };
-  const [first] = parseFindings(report).findings;
-  if (!first) throw new Error("no finding");
-  addFindings(data, [first]);
-  const moved = { ...first, file: "knowledge/ipc.md:19" };
-  expect(addFindings(data, [moved]).skipped).toBe(1);
-  expect(data.findings.map((f) => f.id)).toEqual(["F1"]);
-});
-
-describe("command line", () => {
-  function repository(): string {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "dev-findings-")));
-    roots.push(root);
-    const git = (...args: string[]) =>
-      Bun.spawnSync(["git", "-C", root, ...args], {
-        env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", HOME: root },
-      });
-    git("init", "-q", "-b", "main");
-    git("commit", "-q", "--allow-empty", "-m", "start", "--author=T <t@t>");
-    return root;
-  }
-  const run = (root: string, args: string[], input?: string) => {
-    const result = Bun.spawnSync(["bun", SCRIPT, root, ...args], {
-      stdin: input === undefined ? "ignore" : Buffer.from(input),
-      env: {
-        ...process.env,
-        GIT_COMMITTER_NAME: "T",
-        GIT_COMMITTER_EMAIL: "t@t",
-      },
-    });
-    return {
-      code: result.exitCode,
-      out: result.stdout.toString(),
-      err: result.stderr.toString(),
-    };
+describe("the command line", () => {
+  /** Plans a defect review, all in batch 1, and returns its leads. */
+  const plan = (root: string) => {
+    expect(run(root, "review.ts", ["defect"]).code).toBe(0);
+    const batch = run(root, "review.ts", ["--batch", "1"]).out;
+    expect(batch).toContain("- knowledge/product/chat.md (");
+    return [...batch.matchAll(/lead (\w+): (.*)/g)].map((m) => ({
+      id: m[1] ?? "",
+      text: m[2] ?? "",
+    }));
   };
+  /** Verdicts for the documents besides chat.md, which hold. */
+  const holds = [
+    "AGENTS.md",
+    "README.md",
+    "plan/README.md",
+    "knowledge/glossary.md",
+    "knowledge/product/files.md",
+    "plan/nodes/root.md",
+  ]
+    .map((path) => `- ${path}: holds\n`)
+    .join("");
 
-  test("start, add, set, and summary keep the file without hand edits", () => {
-    const root = repository();
-    expect(run(root, ["add"], report).code).toBe(2);
-    expect(run(root, ["start", "defect"]).out).toContain(
-      "kept 0 declined findings",
+  test("add records findings, lead verdicts, and the documents that held", () => {
+    const root = project();
+    const leads = plan(root);
+    expect(leads.map((l) => l.text)).toEqual([
+      'line 9 uses engine, which the glossary avoids in favor of "Desktop core": the same sense?',
+    ]);
+    const report = `${finding(1, "knowledge/product/chat.md:9")}\n## Leads\n\n- ${leads[0]?.id}: finding 1\n\n## Verdicts\n\n- knowledge/product/chat.md: findings 1\n${holds}`;
+    expect(run(root, "findings.ts", ["add", "1"], report)).toMatchObject({
+      code: 0,
+      out: "Recorded batch 1: 1 new findings, 6 documents verified\n",
+    });
+    const state = readState(root);
+    expect(state.findings.map((f) => [f.id, f.status, f.file])).toEqual([
+      ["F1", "proposed", "knowledge/product/chat.md:9"],
+    ]);
+    expect(state.leads.map((l) => l.verdict)).toEqual(["finding F1"]);
+    expect(state.verdicts.map((v) => v.path)).toEqual([
+      "AGENTS.md",
+      "README.md",
+      "knowledge/glossary.md",
+      "knowledge/product/files.md",
+      "plan/README.md",
+      "plan/nodes/root.md",
+    ]);
+    // The next review leaves out the document that held.
+    run(root, "review.ts", ["defect"]);
+    expect(run(root, "review.ts", ["--batch", "1"]).out).not.toContain(
+      "- knowledge/product/files.md (",
     );
-    expect(run(root, ["add"], report).out).toBe("Added 2 findings\n");
-    expect(run(root, ["set", "declined", "F2"]).code).toBe(0);
-    expect(run(root, ["set", "declined", "F9"]).err).toContain("No finding F9");
-    const summary = run(root, ["summary"]).out;
-    expect(summary).toContain("defect: 1 proposed, 0 declined, 0 applied");
-    expect(summary).toContain(
-      "knowledge/ipc.md\n- F1 defect, knowledge/ipc.md:17: The reason to read the link is now false.",
+    expect(run(root, "findings.ts", ["add", "1"], report).out).toContain(
+      "0 new findings, 1 already recorded",
     );
-    expect(run(root, ["start", "polish", "HEAD"]).out).toContain(
-      "kept 1 declined findings",
-    );
-    expect(run(root, ["add"], report).out).toBe(
-      "Added 1 findings; skipped 1 already in the file\n",
-    );
-    const text = readFileSync(join(root, FINDINGS), "utf8");
-    expect(text).toContain("- Review: polish, changed since HEAD");
-    expect(text).toContain("## F2 · polish · declined");
-    expect(text).toContain("## F3 · defect · proposed");
   });
 
-  test("refuses a report with a malformed block, and adds nothing", () => {
-    const root = repository();
-    run(root, ["start", "defect"]);
-    const result = run(root, ["add"], "## 1 · defect\n\n- File: a.md:1\n");
+  test("add refuses a report without a verdict for each document and lead, and records nothing", () => {
+    const root = project();
+    plan(root);
+    const result = run(
+      root,
+      "findings.ts",
+      ["add", "1"],
+      "## Verdicts\n\n- knowledge/product/chat.md: holds\n",
+    );
     expect(result.code).toBe(2);
-    expect(result.err).toContain("Nothing added");
+    expect(result.err).toContain(
+      'no verdict for knowledge/product/files.md; add "- knowledge/product/files.md: holds"',
+    );
+    expect(result.err).toContain("no verdict for lead ");
+    expect(readState(root)).toEqual({ verdicts: [], leads: [], findings: [] });
+  });
+
+  test("a finding with a Decision is applied only after its answer", () => {
+    const root = project();
+    const leads = plan(root);
+    const report = `${finding(1, "knowledge/product/chat.md:9", "- Decision: Is the engine the desktop core? Options: rename, keep. Recommend: rename.\n")}\n## Leads\n\n- ${leads[0]?.id}: finding 1\n\n## Verdicts\n\n- knowledge/product/chat.md: findings 1\n${holds}`;
+    run(root, "findings.ts", ["add", "1"], report);
+    expect(run(root, "findings.ts", ["summary"]).out).toBe(
+      [
+        "defect: 6 of 7 documents verified at their current content",
+        "polish: 0 of 7 documents verified at their current content",
+        "",
+        "Decisions to ask the user, one at a time (1)",
+        "- F1 knowledge/product/chat.md:9: Is the engine the desktop core? Options: rename, keep. Recommend: rename.",
+        "",
+      ].join("\n"),
+    );
+    expect(run(root, "findings.ts", ["set", "applied", "F1"]).err).toContain(
+      "F1 need the user's answer first",
+    );
+    expect(run(root, "findings.ts", ["answer", "F1", "Rename it."]).code).toBe(
+      0,
+    );
+    expect(run(root, "findings.ts", ["show", "F1"]).out).toContain(
+      "- Answer: Rename it.",
+    );
+    expect(run(root, "findings.ts", ["set", "applied", "F1"]).code).toBe(0);
+    expect(readState(root).findings).toEqual([]);
+  });
+
+  test("the summary groups proposed findings by rule and links the same quote", () => {
+    const root = project();
+    const leads = plan(root);
+    const second = finding(2, "knowledge/product/chat.md:9").replace(
+      "#glossary",
+      "#what-knowledge-holds",
+    );
+    run(
+      root,
+      "findings.ts",
+      ["add", "1"],
+      `${finding(1, "knowledge/product/chat.md:9")}\n${second}\n## Leads\n\n- ${leads[0]?.id}: finding 1\n\n## Verdicts\n\n- knowledge/product/chat.md: findings 1, 2\n${holds}`,
+    );
+    run(root, "findings.ts", ["set", "declined", "F2"]);
+    expect(run(root, "findings.ts", ["summary"]).out).toContain(
+      [
+        "Proposed findings by rule (1)",
+        "knowledge/dev-framework/knowledge-documentation.md#glossary (1)",
+        "- F1 defect, knowledge/product/chat.md:9: It uses a word the glossary avoids.",
+        "",
+        "Declined: 1",
+      ].join("\n"),
+    );
   });
 });

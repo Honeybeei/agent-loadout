@@ -9,23 +9,34 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { anchors } from "../project/.agents/skills/dev-framework/scripts/check.ts";
 import {
   knowledgeIndex,
   loadPlan,
   renderMap,
   sections,
 } from "../project/.agents/skills/dev-framework/scripts/map.ts";
-import { anchors } from "./check.ts";
 import {
+  changedLines,
   prepareReview,
   RULES,
   RULES_DIRECTORY,
+  readPlan,
   renderBatch,
   UNREVIEWED,
-} from "./review.ts";
+} from "../project/.agents/skills/dev-framework/scripts/review.ts";
+import {
+  readState,
+  STATE,
+  writeState,
+} from "../project/.agents/skills/dev-framework/scripts/state.ts";
 import { planSync, SOURCE } from "./sync.ts";
 
-const REVIEW = join(import.meta.dir, "review.ts");
+const SCRIPTS = join(
+  import.meta.dir,
+  "../project/.agents/skills/dev-framework/scripts",
+);
+const REVIEW = join(SCRIPTS, "review.ts");
 const roots: string[] = [];
 
 afterEach(() => {
@@ -80,10 +91,20 @@ function project(files: Record<string, string> = {}): string {
   return root;
 }
 
-const notes = (root: string, review: "defect" | "polish", path: string) =>
-  prepareReview(root, review)
+/** An entry's notes, then its leads, as a judge reads them. */
+const notes = (
+  root: string,
+  review: "defect" | "polish",
+  path: string,
+  since?: string,
+) => {
+  const entry = prepareReview(root, review, { since })
     .batches.flatMap((b) => b.entries)
-    .find((e) => e.path === path)?.notes ?? [];
+    .find((e) => e.path === path);
+  return entry
+    ? [...entry.notes, ...entry.leads.map((lead) => `lead: ${lead.text}`)]
+    : [];
+};
 
 describe("rules", () => {
   const sourceRules = join(SOURCE, RULES_DIRECTORY);
@@ -134,18 +155,26 @@ describe("rules", () => {
 });
 
 describe("batches", () => {
-  test("pack documents of one type, and spare the managed and generated ones", () => {
+  test("order documents by type, let small batches share a judge, and spare the managed and generated ones", () => {
     const root = project({
       "plan/nodes/a.md": node("a", "root", "explore"),
     });
     const { batches, total } = prepareReview(root, "defect");
-    expect(batches.map((b) => [b.type, b.entries.map((e) => e.path)])).toEqual([
-      ["agents", ["AGENTS.md"]],
-      ["readme", ["README.md", "plan/README.md"]],
-      ["knowledge", ["knowledge/product/chat.md"]],
-      ["goal", ["plan/nodes/root.md"]],
-      ["explore", ["plan/nodes/a.md"]],
-    ]);
+    expect(batches.map((b) => [b.types, b.entries.map((e) => e.path)])).toEqual(
+      [
+        [
+          ["agents", "readme", "knowledge", "goal", "explore"],
+          [
+            "AGENTS.md",
+            "README.md",
+            "plan/README.md",
+            "knowledge/product/chat.md",
+            "plan/nodes/root.md",
+            "plan/nodes/a.md",
+          ],
+        ],
+      ],
+    );
     expect(total).toBe(6);
   });
 
@@ -156,10 +185,12 @@ describe("batches", () => {
       "knowledge/product/b.md": doc("B", long(3000)),
       "knowledge/product/c.md": doc("C", long(6000)),
     });
-    const knowledge = prepareReview(root, "polish").batches.filter(
-      (b) => b.type === "knowledge",
-    );
-    expect(knowledge.map((b) => b.entries.map((e) => e.path))).toEqual([
+    const knowledge = prepareReview(root, "polish")
+      .batches.map((b) =>
+        b.entries.filter((e) => e.type === "knowledge").map((e) => e.path),
+      )
+      .filter((paths) => paths.length > 0);
+    expect(knowledge).toEqual([
       ["knowledge/product/a.md", "knowledge/product/chat.md"],
       ["knowledge/product/b.md"],
       ["knowledge/product/c.md"],
@@ -172,7 +203,7 @@ describe("batches", () => {
       "plan/nodes/a.md": node("a", "root", "explore", "\n## Notes\n- x\n"),
     });
     const paths = (review: "defect" | "polish") =>
-      prepareReview(root, review, "HEAD").batches.flatMap((b) =>
+      prepareReview(root, review, { since: "HEAD" }).batches.flatMap((b) =>
         b.entries.map((e) => e.path),
       );
     expect(paths("defect")).toEqual(["plan/nodes/root.md", "plan/nodes/a.md"]);
@@ -261,10 +292,8 @@ describe("leads", () => {
         `\n## Notes\n- ${sentence}\n`,
       ),
     });
-    const leads = prepareReview(root, "defect", "HEAD")
-      .batches.flatMap((b) => b.entries)
-      .find((e) => e.path === "plan/nodes/a.md")?.notes;
-    expect(leads?.[1]).toStartWith(
+    const leads = notes(root, "defect", "plan/nodes/a.md", "HEAD");
+    expect(leads[1]).toStartWith(
       "lead: line 15 repeats 17 or more words of knowledge/product/chat.md:9",
     );
   });
@@ -316,9 +345,21 @@ describe("leads", () => {
 
   test("list a goal's children, and the declined findings in a document", () => {
     const root = project({ "plan/nodes/a.md": node("a", "root", "explore") });
-    write(root, {
-      ".tmp/doctor/findings.md":
-        "# Doctor Findings\n\n- Commit: abc\n- Review: defect, every document\n\n## F1 · defect · declined\n\n- File: knowledge/product/chat.md:9\n- Quote: Chat streams answers.\n- Rule: x\n- Problem: Vague.\n- Fix: y\n",
+    writeState(root, {
+      verdicts: [],
+      leads: [],
+      findings: [
+        {
+          id: "F1",
+          review: "defect",
+          status: "declined",
+          file: "knowledge/product/chat.md:9",
+          quote: "Chat streams answers.",
+          rule: "x",
+          problem: "Vague.",
+          fix: "y",
+        },
+      ],
     });
     expect(notes(root, "defect", "plan/nodes/root.md")).toContain(
       "child a: explore, todo",
@@ -359,20 +400,20 @@ describe("command line", () => {
   test("lists the batches, and prints one with its rules, topics, and documents", () => {
     const root = project();
     expect(run(root, "defect").out).toStartWith(
-      "Defect review of 5 documents, every document: 4 batches\n1. agents: 1 documents,",
+      "Defect review of 5 documents, every document not verified at its current content: 1 batches\n1. agents, readme, knowledge, goal: 5 documents,",
     );
-    const batch = run(root, "defect", "--batch", "3").out;
+    expect(readPlan(root)?.batches.length).toBe(1);
+    const batch = run(root, "--batch", "1").out;
     expect(batch).toStartWith(
-      "Batch 3 of 4: defect review of knowledge documents\n",
+      "Batch 1 of 1: defect review of agents, readme, knowledge, and goal documents\n\nRules for agents documents:",
     );
     expect(batch).toContain(
       `- ${RULES_DIRECTORY}/knowledge-documentation.md#what-knowledge-holds\n`,
     );
     expect(batch).toContain('- "Chat": knowledge/product/chat.md\n');
-    expect(batch).toContain("Documents\n- knowledge/product/chat.md (");
-    expect(
-      renderBatch(root, "defect", prepareReview(root, "defect").batches, 9),
-    ).toBe("");
+    expect(batch).toContain("\n- knowledge/product/chat.md (");
+    expect(batch).toContain("words): judge it whole");
+    expect(renderBatch(root, prepareReview(root, "defect"), 9)).toBe("");
   });
 
   test("rejects a missing review, an unknown commit, or a batch that does not exist", () => {
@@ -380,8 +421,167 @@ describe("command line", () => {
     expect(run(root).code).toBe(2);
     expect(run(root, "style").code).toBe(2);
     expect(run(root, "defect", "--changed-since", "nope").code).toBe(2);
-    expect(run(root, "defect", "--batch", "9").err).toContain(
-      "There is no batch 9; the review has 4",
+    expect(run(root, "--batch", "1").err).toContain(
+      ".tmp/review/plan.json does not exist",
+    );
+    run(root, "defect");
+    expect(run(root, "--batch", "9").err).toContain(
+      "There is no batch 9; the review has 1",
+    );
+  });
+});
+
+describe("verdicts", () => {
+  const entries = (root: string, options: { fresh?: boolean } = {}) =>
+    prepareReview(root, "defect", options).batches.flatMap((b) => b.entries);
+  const entry = (root: string, path: string) =>
+    entries(root).find((e) => e.path === path);
+  /** Records that a document held, as findings.ts does for a judge's "holds". */
+  const verify = (root: string, path: string) => {
+    const planned = entry(root, path);
+    if (!planned) throw new Error(`${path} is not planned`);
+    git(root, "hash-object", "-w", path);
+    const state = readState(root);
+    state.verdicts.push({
+      review: "defect",
+      path,
+      blob: planned.blob,
+      rules: planned.rules,
+    });
+    writeState(root, state);
+  };
+
+  test("a document that held is skipped, and judged only on the lines changed since", () => {
+    const root = project();
+    verify(root, "knowledge/product/chat.md");
+    expect(entry(root, "knowledge/product/chat.md")).toBeUndefined();
+    write(root, {
+      "knowledge/product/chat.md": doc(
+        "Chat",
+        "\nChat streams answers.\n",
+      ).replace("before changing Chat", "before changing chat streaming"),
+    });
+    expect(entry(root, "knowledge/product/chat.md")).toBeUndefined();
+    write(root, {
+      "knowledge/product/chat.md": doc(
+        "Chat",
+        "\nChat streams answers.\n\nIt cites its sources.\n",
+      ),
+    });
+    expect(entry(root, "knowledge/product/chat.md")).toMatchObject({
+      basis: "verdict",
+      lines: [11],
+    });
+    expect(
+      entries(root, { fresh: true }).find(
+        (e) => e.path === "knowledge/product/chat.md",
+      )?.basis,
+    ).toBe("whole");
+  });
+
+  test("a changed rule section sets the verdicts of its documents aside", () => {
+    const root = project();
+    verify(root, "knowledge/product/chat.md");
+    const rules = join(root, RULES_DIRECTORY, "knowledge-documentation.md");
+    writeFileSync(
+      rules,
+      readFileSync(rules, "utf8").replace(
+        "## What Knowledge holds\n",
+        "## What Knowledge holds\n\nA new rule.\n",
+      ),
+    );
+    expect(entry(root, "knowledge/product/chat.md")?.basis).toBe("whole");
+  });
+
+  test("a changed Knowledge document puts a lead on each line that links it", () => {
+    const root = project({
+      "plan/nodes/a.md": node(
+        "a",
+        "root",
+        "explore",
+        "\n## Notes\n- Streaming, as [Chat](../../knowledge/product/chat.md) says.\n",
+      ),
+    });
+    verify(root, "knowledge/product/chat.md");
+    verify(root, "plan/nodes/a.md");
+    write(root, {
+      "knowledge/product/chat.md": doc("Chat", "\nChat answers at once.\n"),
+    });
+    const linking = entry(root, "plan/nodes/a.md");
+    expect(linking).toMatchObject({ basis: "link", lines: [15] });
+    expect(linking?.leads.map((l) => l.text)).toEqual([
+      `line 15 links knowledge/product/chat.md, which changed at ${entry(root, "knowledge/product/chat.md")?.blob.slice(0, 7)}: does what it says of it still hold?`,
+    ]);
+  });
+
+  test("a lead with a verdict is not asked again while its line stays", () => {
+    const root = project({
+      "knowledge/glossary.md": doc(
+        "Glossary",
+        "\n- **Desktop core**: the crate. Avoid: engine.\n",
+      ),
+      "knowledge/product/chat.md": doc("Chat", "\nThe engine streams.\n"),
+    });
+    const [lead] = entry(root, "knowledge/product/chat.md")?.leads ?? [];
+    expect(lead?.text).toStartWith("line 9 uses engine");
+    writeState(root, {
+      ...readState(root),
+      leads: [
+        {
+          review: "defect",
+          path: "knowledge/product/chat.md",
+          id: lead?.id ?? "",
+          verdict: "not a finding: the library's name",
+        },
+      ],
+    });
+    expect(entry(root, "knowledge/product/chat.md")?.leads).toEqual([]);
+    write(root, {
+      "knowledge/product/chat.md": doc(
+        "Chat",
+        "\nIntro.\n\nThe engine streams.\n",
+      ),
+    });
+    expect(entry(root, "knowledge/product/chat.md")?.leads).toEqual([]);
+    write(root, {
+      "knowledge/product/chat.md": doc("Chat", "\nThe engine streams fast.\n"),
+    });
+    expect(entry(root, "knowledge/product/chat.md")?.leads).toHaveLength(1);
+  });
+
+  test("a review limited to a commit judges the lines the change wrote", () => {
+    const root = project();
+    write(root, {
+      "knowledge/product/chat.md": doc(
+        "Chat",
+        "\nChat streams answers.\n\nIt cites its sources.\n",
+      ),
+    });
+    expect(
+      prepareReview(root, "defect", { since: "HEAD" })
+        .batches.flatMap((b) => b.entries)
+        .find((e) => e.path === "knowledge/product/chat.md"),
+    ).toMatchObject({ basis: "change", lines: [11] });
+  });
+
+  test("changedLines finds the lines the new text adds or changes", () => {
+    expect(changedLines("# T\n\na\nb\nc\n", "# T\n\na\nx\nc\n\nd\n")).toEqual([
+      4, 7,
+    ]);
+  });
+
+  test("the state file keeps one sorted line per entry", () => {
+    const root = project();
+    writeState(root, {
+      verdicts: [
+        { review: "defect", path: "b.md", blob: "2", rules: "r" },
+        { review: "defect", path: "a.md", blob: "1", rules: "r" },
+      ],
+      leads: [],
+      findings: [],
+    });
+    expect(readFileSync(join(root, STATE), "utf8")).toBe(
+      '{"type":"verdict","review":"defect","path":"a.md","blob":"1","rules":"r"}\n{"type":"verdict","review":"defect","path":"b.md","blob":"2","rules":"r"}\n',
     );
   });
 });

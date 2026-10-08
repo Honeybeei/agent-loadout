@@ -1,29 +1,35 @@
-// Prepares dev-doctor's reviews, the checks only judgment can settle. It changes nothing.
-// Usage: bun review.ts [project-root] <defect|polish> [--changed-since <commit>] [--batch <n>]
+// Plans the reviews that judge what scripts cannot: dev-doctor's, and the commit gate's.
+// Usage: bun review.ts [project-root] <defect|polish> [--changed-since <commit>] [--fresh]
+//        bun review.ts [project-root] --batch <n>
 // Documents of one type are packed into batches, each with the rule sections that type is judged
 // against and the leads scripts found: spots a judge must look at, which may or may not break a rule.
+// A document that held is skipped while it and its rules stay unchanged, and judged on its changed lines
+// after an edit. The plan goes to .tmp/review/plan.json for the judges and findings.ts; nothing else changes.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import {
-  items,
-  loadPlan,
-  type PlanNode,
-  sections,
-} from "../project/.agents/skills/dev-framework/scripts/map.ts";
-import {
+  anchors,
   BUILD_STATUS,
   blankCode,
+  check,
   type DocumentType,
-  diagnose,
+  END,
   markdownLinks,
+  START,
   topicOwners,
 } from "./check.ts";
-import { documentOf, readFindings } from "./findings.ts";
-import { END, START } from "./sync.ts";
+import { items, loadPlan, type PlanNode, sections } from "./map.ts";
+import { type Finding, REVIEWS, type Review, readState } from "./state.ts";
 
-export const REVIEWS = ["defect", "polish"] as const;
-export type Review = (typeof REVIEWS)[number];
+export { REVIEWS, type Review };
 
 /** The batch order: entry points first, then Knowledge, then the Plan from the top down. */
 export const TYPES: DocumentType[] = [
@@ -157,22 +163,143 @@ export const UNREVIEWED = [
   "plan-documentation.md#map",
 ];
 
+export interface Lead {
+  /** Stable while the document's line and the lead's wording stay, so a verdict on it is kept. */
+  id: string;
+  line?: number;
+  text: string;
+}
+
+/**
+ * What a judge covers in a document: all of it, or the lines changed since it last held (`verdict`),
+ * since the commit a review is limited to (`change`), or that link a changed Knowledge document (`link`).
+ */
+export type Basis = "whole" | "verdict" | "change" | "link";
+
 export interface Entry {
   path: string;
   type: DocumentType;
   words: number;
-  /** Status, children, leads, and declined findings, one line each. */
+  basis: Basis;
+  /** The lines to judge, unless the basis is whole. */
+  lines: number[];
+  /** The blob judged, and the hash of its type's rule sections, which a verdict records. */
+  blob: string;
+  rules: string;
+  leads: Lead[];
+  /** Status, children, and declined findings, one line each. */
   notes: string[];
 }
 
 export interface Batch {
-  type: DocumentType;
+  /** The types of its documents, in batch order. */
+  types: DocumentType[];
   entries: Entry[];
 }
 
-function git(root: string, args: string[]) {
-  return spawnSync("git", ["-C", root, ...args], { encoding: "utf8" });
+export interface Plan {
+  review: Review;
+  scope: string;
+  total: number;
+  batches: Batch[];
 }
+
+export const PLAN = ".tmp/review/plan.json";
+
+function git(root: string, args: string[]) {
+  return spawnSync("git", ["-C", root, ...args], {
+    encoding: "utf8",
+    maxBuffer: 1 << 30,
+  });
+}
+
+/** Git's blob id of a text. */
+export const blobOf = (text: string) =>
+  createHash("sha1")
+    .update(`blob ${Buffer.byteLength(text)}\0`)
+    .update(text)
+    .digest("hex");
+
+/** One rule as the project's copy states it: a section of a rule document, or all of it. */
+function ruleText(root: string, rule: string): string {
+  const [file = "", fragment] = rule.split("#");
+  const path = join(root, RULES_DIRECTORY, file);
+  if (!existsSync(path)) return "";
+  const text = readFileSync(path, "utf8");
+  if (fragment === undefined) return text;
+  return sections(text)
+    .filter(({ heading }) => anchors(`## ${heading}`).has(fragment))
+    .map(({ heading, lines }) => [heading, ...lines].join("\n"))
+    .join("\n");
+}
+
+/** A hash of the rule sections a type is judged against; it changes when any of them does. */
+export const rulesHash = (root: string, review: Review, type: DocumentType) =>
+  createHash("sha1")
+    .update(
+      RULES[review][type]
+        .map((rule) => `${rule}\n${ruleText(root, rule)}`)
+        .join("\n"),
+    )
+    .digest("hex")
+    .slice(0, 12);
+
+/** The body lines, without frontmatter, blank lines, or managed sections, numbered as in the file. */
+function bodyLines(text: string): { number: number; text: string }[] {
+  const frontmatter = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/.exec(text)?.[0];
+  const offset = frontmatter ? frontmatter.split("\n").length - 1 : 0;
+  let managed = false;
+  return text
+    .slice(frontmatter?.length ?? 0)
+    .split("\n")
+    .map((line, index) => {
+      if (line.trimEnd() === START) managed = true;
+      const kept = managed ? "" : line.trim();
+      if (line.trimEnd() === END) managed = false;
+      return { number: index + 1 + offset, text: kept };
+    })
+    .filter((line) => line.text !== "");
+}
+
+/** The numbers of the lines in `after` that `before` lacks, by a longest common subsequence of body lines. */
+export function changedLines(before: string, after: string): number[] {
+  const a = bodyLines(before).map((line) => line.text);
+  const b = bodyLines(after);
+  const width = b.length + 1;
+  const common = new Int32Array((a.length + 1) * width);
+  const at = (i: number, j: number) => common[i * width + j] ?? 0;
+  for (let i = a.length - 1; i >= 0; i--)
+    for (let j = b.length - 1; j >= 0; j--)
+      common[i * width + j] =
+        a[i] === b[j]?.text
+          ? at(i + 1, j + 1) + 1
+          : Math.max(at(i + 1, j), at(i, j + 1));
+  const changed: number[] = [];
+  let i = 0;
+  for (let j = 0; j < b.length; ) {
+    if (i < a.length && a[i] === b[j]?.text) {
+      i++;
+      j++;
+    } else if (i < a.length && at(i + 1, j) >= at(i, j + 1)) i++;
+    else {
+      changed.push(b[j]?.number ?? 0);
+      j++;
+    }
+  }
+  return changed;
+}
+
+/** "3, 12–15, 30" */
+const ranges = (numbers: number[]) =>
+  numbers
+    .reduce<number[][]>((runs, n) => {
+      const last = runs.at(-1);
+      if (last && n === (last.at(-1) ?? 0) + 1) last.push(n);
+      else runs.push([n]);
+      return runs;
+    }, [])
+    .map((run) => (run.length === 1 ? `${run[0]}` : `${run[0]}–${run.at(-1)}`))
+    .join(", ");
 
 const wordCount = (text: string) => text.split(/\s+/).filter(Boolean).length;
 
@@ -236,7 +363,6 @@ const HISTORY =
   /\b(?:first|once|originally) (?:read|covered|said)\b|\bgrew to\b|\bjoined because\b|\bre-?scoped\b|\ban earlier attempt\b/i;
 const HANDOFF = ["Out of scope", "For the Plan"];
 const LONG_ITEM = 50;
-const LEADS_PER_DOCUMENT = 12;
 
 /** Spots in each document that a judge must look at, keyed by path. */
 function findLeads(
@@ -509,22 +635,44 @@ function listRules(root: string): string[] {
   return files.filter((path) => existsSync(join(root, path)));
 }
 
+/** A lead's id: its document, its wording without line numbers, and the line it points at. */
+const leadId = (path: string, text: string, line: string) =>
+  createHash("sha1")
+    .update(
+      [
+        path,
+        text.replace(/\bline \d+\b/g, "line").replace(/(\.md):\d+/g, "$1"),
+        line,
+      ].join("\n"),
+    )
+    .digest("hex")
+    .slice(0, 8);
+
 /**
- * The documents a review covers, packed into batches. With a commit, only documents changed since,
- * documents whose type's rules changed since, and goals whose children changed.
+ * The documents a review covers, packed into batches. Without a commit, every document not verified at
+ * its current content; with one, documents changed since, documents whose type's rules changed since,
+ * and goals whose children changed. `fresh` sets the verdicts aside.
  */
 export function prepareReview(
   projectRoot: string,
   review: Review,
-  since?: string,
-): { batches: Batch[]; scope: string; total: number } {
+  options: { since?: string; fresh?: boolean } = {},
+): Plan {
+  const { since, fresh = false } = options;
   const root = realpathSync(projectRoot);
-  const { documents } = diagnose(root);
+  const { documents } = check(root);
   const plan = loadPlan(root);
-  let selected = documents;
-  let scope = "every document";
+  const state = readState(root);
+  const text = (path: string) => readFileSync(join(root, path), "utf8");
+  const nodeOf = (path: string) =>
+    plan.nodes.get(/^plan\/nodes\/([^/]+)\.md$/.exec(path)?.[1] ?? "");
+
+  let changed: Set<string> | undefined;
+  let scope = fresh
+    ? "every document"
+    : "every document not verified at its current content";
   if (since !== undefined) {
-    const changed = new Set(
+    changed = new Set(
       [
         ...git(root, ["diff", "--name-only", "-z", since]).stdout.split("\0"),
         ...git(root, [
@@ -535,54 +683,161 @@ export function prepareReview(
         ]).stdout.split("\0"),
       ].filter(Boolean),
     );
-    const childChanged = (path: string) =>
-      plan.nodes
-        .get(basename(path, ".md"))
-        ?.children.some((child) => changed.has(`plan/nodes/${child.id}.md`));
-    selected = documents.filter(
-      (d) =>
-        changed.has(d.path) ||
-        ruleFiles(review, d.type).some((file) => changed.has(file)) ||
-        (review === "defect" && d.type === "goal" && childChanged(d.path)),
-    );
     scope = `changed since ${since}`;
   }
+  const inScope = (path: string, type: DocumentType) =>
+    changed === undefined ||
+    changed.has(path) ||
+    ruleFiles(review, type).some((file) => changed?.has(file)) ||
+    (review === "defect" &&
+      type === "goal" &&
+      (nodeOf(path)?.children ?? []).some((child) =>
+        changed?.has(`plan/nodes/${child.id}.md`),
+      ));
 
-  const leads = findLeads(root, review, selected, documents, plan.nodes);
-  const declined = readFindings(root)?.findings.filter(
-    (f) => f.status === "declined" && f.severity === review,
+  const verdicts = new Map(
+    state.verdicts.filter((v) => v.review === review).map((v) => [v.path, v]),
   );
-  const entries: Entry[] = selected.map(({ path, type }) => {
-    const node = plan.nodes.get(
-      /^plan\/nodes\/([^/]+)\.md$/.exec(path)?.[1] ?? "",
-    );
-    const found = leads.get(path) ?? [];
-    return {
+  const selected: Omit<Entry, "words" | "leads" | "notes">[] = [];
+  for (const { path, type } of documents) {
+    if (!inScope(path, type)) continue;
+    const content = text(path);
+    const entry = {
       path,
       type,
-      words: wordCount(readFileSync(join(root, path), "utf8")),
+      blob: blobOf(content),
+      rules: rulesHash(root, review, type),
+    };
+    const verdict = fresh ? undefined : verdicts.get(path);
+    if (verdict?.rules === entry.rules) {
+      if (verdict.blob === entry.blob) continue;
+      const before = git(root, ["cat-file", "-p", verdict.blob]);
+      if (before.status === 0) {
+        const lines = changedLines(before.stdout, content);
+        // Only frontmatter or blank lines changed: the verdict still holds.
+        if (lines.length > 0)
+          selected.push({ ...entry, basis: "verdict", lines });
+        continue;
+      }
+    }
+    const before =
+      since !== undefined && changed?.has(path)
+        ? git(root, ["show", `${since}:${path}`])
+        : undefined;
+    if (before?.status === 0) {
+      const lines = changedLines(before.stdout, content);
+      if (lines.length > 0) selected.push({ ...entry, basis: "change", lines });
+    } else selected.push({ ...entry, basis: "whole", lines: [] });
+  }
+
+  // A changed Knowledge document can leave the lines that link it stale.
+  const linkLeads: { path: string; line: number; text: string }[] = [];
+  if (review === "defect")
+    for (const target of selected.filter(
+      (e) => e.type === "knowledge" && e.basis !== "whole",
+    ))
+      for (const { path, type } of documents) {
+        const node = nodeOf(path);
+        if (
+          path === target.path ||
+          node?.status === "done" ||
+          node?.status === "cancelled"
+        )
+          continue;
+        const linking = bodyLines(blankCode(text(path))).filter(({ text }) =>
+          markdownLinks(text).some(
+            (link) =>
+              relative(root, resolve(dirname(join(root, path)), link.file)) ===
+              target.path,
+          ),
+        );
+        if (linking.length === 0) continue;
+        let entry = selected.find((e) => e.path === path);
+        if (!entry) {
+          const content = text(path);
+          entry = {
+            path,
+            type,
+            blob: blobOf(content),
+            rules: rulesHash(root, review, type),
+            basis: "link",
+            lines: [],
+          };
+          selected.push(entry);
+        }
+        for (const { number } of linking) {
+          if (entry.basis !== "whole" && !entry.lines.includes(number))
+            entry.lines.push(number);
+          linkLeads.push({
+            path,
+            line: number,
+            text: `line ${number} links ${target.path}, which changed at ${target.blob.slice(0, 7)}: does what it says of it still hold?`,
+          });
+        }
+        entry.lines.sort((a, b) => a - b);
+      }
+
+  const found = findLeads(root, review, selected, documents, plan.nodes);
+  for (const { path, text } of linkLeads)
+    found.set(path, [...(found.get(path) ?? []), text]);
+  const judged = new Set(
+    state.leads.filter((l) => l.review === review).map((l) => l.id),
+  );
+  const declined = state.findings.filter(
+    (f) => f.status === "declined" && f.review === review,
+  );
+  const documentOf = (finding: Finding) =>
+    finding.file.replace(/:\d+(?:[-–]\d+)?$/, "");
+  const entries: Entry[] = selected.map((entry) => {
+    const lines = text(entry.path).split("\n");
+    const node = nodeOf(entry.path);
+    const leads = (found.get(entry.path) ?? [])
+      .map((lead): Lead => {
+        const line = Number(/^line (\d+)\b/.exec(lead)?.[1]) || undefined;
+        return {
+          id: leadId(
+            entry.path,
+            lead,
+            line ? (lines[line - 1] ?? "").trim() : "",
+          ),
+          ...(line ? { line } : {}),
+          text: lead,
+        };
+      })
+      .filter(
+        (lead) =>
+          !judged.has(lead.id) &&
+          (entry.basis === "whole" ||
+            lead.line === undefined ||
+            entry.lines.includes(lead.line)),
+      );
+    const judgedLines = entry.lines.map((n) => lines[n - 1] ?? "").join(" ");
+    const all = wordCount(lines.join(" "));
+    return {
+      ...entry,
+      leads,
+      words:
+        entry.basis === "whole"
+          ? all
+          : Math.min(all, 200 + wordCount(judgedLines)),
       notes: [
         ...(node ? [`status ${node.status}`] : []),
-        // A goal's children, for judging its planning; never cut short like leads.
+        // A goal's children, for judging its planning.
         ...(review === "defect" && node?.kind === "goal"
           ? node.children.map(
               (child) =>
                 `child ${child.id}: ${child.kind}, ${child.status}${child.dependsOn.length > 0 ? `, depends on ${child.dependsOn.join(", ")}` : ""}`,
             )
           : []),
-        ...found.slice(0, LEADS_PER_DOCUMENT).map((lead) => `lead: ${lead}`),
-        ...(found.length > LEADS_PER_DOCUMENT
-          ? [`lead: ${found.length - LEADS_PER_DOCUMENT} more like these`]
-          : []),
-        ...(declined ?? [])
-          .filter((f) => documentOf(f) === path)
+        ...declined
+          .filter((f) => documentOf(f) === entry.path)
           .map((f) => `declined ${f.id} at ${f.file}: ${f.problem}`),
       ],
     };
   });
 
   // Each document goes into the first batch of its type with room for it.
-  const batches: (Batch & { words: number })[] = [];
+  const batches: { type: DocumentType; entries: Entry[]; words: number }[] = [];
   for (const type of TYPES)
     for (const entry of entries.filter((e) => e.type === type)) {
       let batch = batches.find(
@@ -595,7 +850,37 @@ export function prepareReview(
       batch.entries.push(entry);
       batch.words += entry.words;
     }
-  return { batches, scope, total: selected.length };
+  // Small batches of different types share a judge, who reads each type's rules.
+  const merged: { entries: Entry[]; words: number }[] = [];
+  for (const batch of batches) {
+    const last = merged.at(-1);
+    if (last && last.words + batch.words <= BUDGET) {
+      last.entries.push(...batch.entries);
+      last.words += batch.words;
+    } else merged.push({ entries: [...batch.entries], words: batch.words });
+  }
+  return {
+    review,
+    scope,
+    total: entries.length,
+    batches: merged.map(({ entries }) => ({
+      types: [...new Set(entries.map((e) => e.type))],
+      entries,
+    })),
+  };
+}
+
+export function savePlan(root: string, plan: Plan): void {
+  const path = join(root, PLAN);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(plan, null, 1)}\n`);
+}
+
+export function readPlan(root: string): Plan | undefined {
+  const path = join(root, PLAN);
+  return existsSync(path)
+    ? (JSON.parse(readFileSync(path, "utf8")) as Plan)
+    : undefined;
 }
 
 /** What a judge of a Knowledge batch needs to tell a summary from a second owner. */
@@ -605,25 +890,41 @@ function topicContext(root: string, documents: string[]): string[] {
   );
 }
 
-export function renderBatch(
-  root: string,
-  review: Review,
-  batches: Batch[],
-  number: number,
-): string {
-  const batch = batches[number - 1];
+const covers = (entry: Entry) =>
+  entry.basis === "whole"
+    ? "judge it whole"
+    : `judge only lines ${ranges(entry.lines)}, which ${
+        {
+          verdict: "changed since it last held",
+          change: "the change wrote",
+          link: "link a changed document",
+        }[entry.basis]
+      }`;
+
+/** "a", "a and b", "a, b, and c" */
+const listed = (words: string[]) =>
+  words.length < 3
+    ? words.join(" and ")
+    : `${words.slice(0, -1).join(", ")}, and ${words.at(-1)}`;
+
+export function renderBatch(root: string, plan: Plan, number: number): string {
+  const batch = plan.batches[number - 1];
   if (!batch) return "";
+  const { review } = plan;
   const lines = [
-    `Batch ${number} of ${batches.length}: ${review} review of ${batch.type} documents`,
-    "",
-    "Rules: read these sections of the project's copies, and judge each document against every rule in them",
-    ...RULES[review][batch.type].map(
-      (rule) =>
-        `- ${RULES_DIRECTORY}/${rule}${rule.includes("#") ? "" : " (every section)"}`,
-    ),
+    `Batch ${number} of ${plan.batches.length}: ${review} review of ${listed(batch.types)} documents`,
   ];
-  if (batch.type === "knowledge" && review === "defect") {
-    const knowledge = diagnose(root)
+  for (const type of batch.types)
+    lines.push(
+      "",
+      `Rules for ${type} documents: read these sections of the project's copies, and judge each ${type} document against every rule in them`,
+      ...RULES[review][type].map(
+        (rule) =>
+          `- ${RULES_DIRECTORY}/${rule}${rule.includes("#") ? "" : " (every section)"}`,
+      ),
+    );
+  if (batch.types.includes("knowledge") && review === "defect") {
+    const knowledge = check(root)
       .documents.filter((d) => d.type === "knowledge")
       .map((d) => d.path);
     lines.push(
@@ -636,14 +937,18 @@ export function renderBatch(
   }
   lines.push("", "Documents");
   for (const entry of batch.entries) {
-    lines.push(`- ${entry.path} (${entry.words} words)`);
+    lines.push(`- ${entry.path} (${entry.words} words): ${covers(entry)}`);
     for (const note of entry.notes) lines.push(`  - ${note}`);
+    for (const lead of entry.leads)
+      lines.push(`  - lead ${lead.id}: ${lead.text}`);
   }
   return lines.join("\n");
 }
 
-const USAGE =
-  "Usage: bun review.ts [project-root] <defect|polish> [--changed-since <commit>] [--batch <n>]";
+const USAGE = [
+  "Usage: bun review.ts [project-root] <defect|polish> [--changed-since <commit>] [--fresh]",
+  "       bun review.ts [project-root] --batch <n>",
+].join("\n");
 
 if (import.meta.main) {
   const args = process.argv.slice(2);
@@ -653,48 +958,52 @@ if (import.meta.main) {
     const arg = args[i] ?? "";
     if (arg === "--changed-since" || arg === "--batch")
       options.set(arg, args[++i] ?? "");
+    else if (arg === "--fresh") options.set(arg, "");
     else positional.push(arg);
   }
-  const review = positional.at(-1) as Review;
-  const root = resolve(positional.length > 1 ? (positional[0] ?? ".") : ".");
-  const since = options.get("--changed-since");
-  const number = options.has("--batch")
-    ? Number(options.get("--batch"))
-    : undefined;
-  if (
-    positional.length === 0 ||
-    positional.length > 2 ||
-    !REVIEWS.includes(review) ||
-    (number !== undefined && !(number >= 1)) ||
-    (since !== undefined &&
-      git(root, ["rev-parse", "--verify", "--quiet", `${since}^{commit}`])
-        .status !== 0)
-  ) {
-    console.error(USAGE);
+  const fail = (message: string) => {
+    console.error(message);
     process.exit(2);
-  }
-  const { batches, scope, total } = prepareReview(root, review, since);
-  if (number !== undefined) {
-    const text = renderBatch(realpathSync(root), review, batches, number);
-    if (text === "") {
-      console.error(
-        `There is no batch ${number}; the review has ${batches.length}`,
+  };
+  if (options.has("--batch")) {
+    const number = Number(options.get("--batch"));
+    const root = realpathSync(resolve(positional[0] ?? "."));
+    const plan = readPlan(root);
+    if (positional.length > 1 || options.size > 1 || !(number >= 1))
+      fail(USAGE);
+    if (!plan) fail(`${PLAN} does not exist; plan the review first`);
+    const text = plan ? renderBatch(root, plan, number) : "";
+    if (text === "")
+      fail(
+        `There is no batch ${number}; the review has ${plan?.batches.length}`,
       );
-      process.exit(2);
-    }
     console.log(text);
   } else {
+    const review = positional.at(-1) as Review;
+    const root = resolve(positional.length > 1 ? (positional[0] ?? ".") : ".");
+    const since = options.get("--changed-since");
+    if (
+      positional.length === 0 ||
+      positional.length > 2 ||
+      !REVIEWS.includes(review) ||
+      (since !== undefined &&
+        git(root, ["rev-parse", "--verify", "--quiet", `${since}^{commit}`])
+          .status !== 0)
+    )
+      fail(USAGE);
+    const plan = prepareReview(root, review, {
+      since,
+      fresh: options.has("--fresh"),
+    });
+    savePlan(realpathSync(root), plan);
     console.log(
-      `${review[0]?.toUpperCase()}${review.slice(1)} review of ${total} documents, ${scope}: ${batches.length} batches`,
+      `${review[0]?.toUpperCase()}${review.slice(1)} review of ${plan.total} documents, ${plan.scope}: ${plan.batches.length} batches`,
     );
-    batches.forEach((batch, i) => {
+    plan.batches.forEach((batch, i) => {
       const words = batch.entries.reduce((sum, e) => sum + e.words, 0);
-      const leads = batch.entries.reduce(
-        (sum, e) => sum + e.notes.filter((n) => n.startsWith("lead:")).length,
-        0,
-      );
+      const leads = batch.entries.reduce((sum, e) => sum + e.leads.length, 0);
       console.log(
-        `${i + 1}. ${batch.type}: ${batch.entries.length} documents, ${words} words, ${leads} leads`,
+        `${i + 1}. ${batch.types.join(", ")}: ${batch.entries.length} documents, ${words} words, ${leads} leads`,
       );
     });
   }

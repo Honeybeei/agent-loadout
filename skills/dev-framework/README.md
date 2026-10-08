@@ -24,15 +24,19 @@ The copy step also links `.claude/skills` to `../.agents/skills` in the project.
 
 ## Scripts
 
+The project scripts live in `project/.agents/skills/dev-framework/scripts/`, beside [review.md](project/.agents/skills/dev-framework/review.md), which says how to run and judge a review.
+
 | Script | Runs in | Purpose |
 | --- | --- | --- |
 | [scripts/sync.ts](scripts/sync.ts) | The harness, for `dev-doctor` | Copies managed material into a project; `--check` previews |
-| [scripts/check.ts](scripts/check.ts) | The harness, for `dev-doctor` | Reports whether a project is adopted and current, and, with `--group`, every rule break a script can find in each group, with its fix |
-| [scripts/review.ts](scripts/review.ts) | The harness, for `dev-doctor` | Plans a defect or polish review: batches of documents of one type, each with the rule sections it is judged against and the leads scripts found, spots only judgment can settle |
-| [scripts/findings.ts](scripts/findings.ts) | The harness, for `dev-doctor` | Keeps the review findings and their status in `.tmp/doctor/findings.md` |
-| [project/.agents/skills/dev-framework/scripts/map.ts](project/.agents/skills/dev-framework/scripts/map.ts) | Each project | Checks the Plan, and generates `plan/map.md` and the browser view `.tmp/plan/map.html`; `--check` reports a stale map |
+| [scripts/doctor.ts](scripts/doctor.ts) | The harness, for `dev-doctor` | Reports whether a project is adopted and current, and, with `--group`, the findings of `check.ts` and the leftovers of earlier Frameworks |
+| `map.ts` | Each project | Checks the Plan and the Knowledge layout, and generates `plan/map.md`, the browser view `.tmp/plan/map.html`, and `knowledge/README.md`; `--check` reports what is stale |
+| `check.ts` | Each project | Every rule break a script can find, by group, with its fix |
+| `review.ts` | Each project | Plans a defect or polish review in batches, each with the rule sections its documents are judged against and the leads scripts found; skips what held and has not changed |
+| `findings.ts` | Each project | Records judges' reports in the review state, `.dev/review.jsonl`, and lists, sets, and answers findings |
+| `state.ts` | Each project | Reads and writes the review state |
 
-A rule that a script can test without false alarms is checked by one. A check that runs in `map.ts` catches a mistake when a node is written, because every workflow skill regenerates the map; it also blocks the map, so it belongs there only when an edit to the node can always fix it. Other checks run in `check.ts`, when `dev-doctor` runs. A pattern a script can find but only judgment can settle becomes a lead in `review.ts`.
+A rule that a script can test without false alarms is checked by one. A check that runs in `map.ts` catches a mistake when a node or Knowledge document is written, because every workflow skill regenerates the map; it also blocks its output, so it belongs there only when an edit can always fix it. Other checks run in `check.ts`, at the commit gate and when `dev-doctor` runs. A pattern a script can find but only judgment can settle becomes a lead in `review.ts`.
 
 The scripts need only Bun. Their tests live in `scripts/` here, outside `project/`, so they are not copied into projects:
 
