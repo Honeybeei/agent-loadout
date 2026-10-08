@@ -14,7 +14,8 @@
   },
   "include": [
     "scripts/**/*.ts",
-    "skills/**/*.ts",
-    "skills/dev-framework/project/.agents/**/*.ts"
+    "cli/**/*.ts",
+    "tests/**/*.ts",
+    "project/.agents/**/*.ts"
   ]
 }

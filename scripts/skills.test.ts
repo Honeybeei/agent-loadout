@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
-import { REPO } from "./apply.ts";
+import { join, relative, resolve } from "node:path";
+
+const REPO = resolve(import.meta.dir, "..");
 
 // Harnesses skip a skill whose frontmatter is not valid YAML, often with only a warning.
 function skillFiles(directory: string): string[] {
@@ -13,19 +14,17 @@ function skillFiles(directory: string): string[] {
   });
 }
 
-// Installed skills, and the skills for working on this repository.
+// The skills projects receive, and the skills for working on this repository.
 const files = [
-  ...skillFiles(join(REPO, "skills")),
+  ...skillFiles(join(REPO, "project", ".agents", "skills")),
   ...skillFiles(join(REPO, ".agents", "skills")),
 ];
 
-test("finds the skills, including the Framework's project skills", () => {
+test("finds the skills projects receive and this repository's own", () => {
   const paths = files.map((file) => relative(REPO, file));
-  expect(paths).toContain("skills/dev-doctor/SKILL.md");
+  expect(paths).toContain("project/.agents/skills/dev-doctor/SKILL.md");
+  expect(paths).toContain("project/.agents/skills/dev-next/SKILL.md");
   expect(paths).toContain(".agents/skills/resolve-feedback/SKILL.md");
-  expect(paths).toContain(
-    "skills/dev-framework/project/.agents/skills/dev-next/SKILL.md",
-  );
 });
 
 for (const file of files) {

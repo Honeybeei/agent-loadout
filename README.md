@@ -1,86 +1,115 @@
-# Agent Loadout
+# Dev Framework
 
-Agent Loadout is the single source of truth for the material that every development harness should share: the global prompt, personal skills, and the Dev Framework. An apply script installs the global prompt and skills into each harness's user area; the Framework's `dev-doctor` skill then copies the Framework into each project, keeps it up to date, and checks that the project follows its rules. The same skills and rules work regardless of which harness or inference provider runs the session.
+Dev Framework is a method for managing a software project with AI agents. This repository is its source, together with the `dev-framework` command, which copies the Framework into a project and updates it there.
 
-## Why
-
-Pi is not tied to one inference provider, while a Claude subscription can be used only inside Claude Code. Keeping shared material here, instead of inside one harness's configuration, gives both harnesses identical skills, and every Framework project the same rules.
-
-## Scope
-
-This repository holds:
-
-- The global prompt: a common part plus per-harness additions, combined per harness when applied.
-- Personal skills that are useful in any project.
-- The Dev Framework: a method for managing projects. It applies to a project whose repository root contains `dev.yaml`.
-
-A Framework project carries its own managed copy of the Framework: the rules in `knowledge/dev-framework/`, managed sections in its root README and AGENTS, and the workflow skills in `.agents/skills/`. `dev-doctor` puts them there, so any person or agent can read the rules and use the skills without this repository. See [skills/dev-framework/README.md](skills/dev-framework/README.md).
-
-Harness-specific settings stay in each harness's own configuration: themes, keybindings, models, authentication, Pi extensions, and Pi subagents.
+A Framework project carries its own copy of the Framework: the rules in `knowledge/dev-framework/`, managed sections in its root README and AGENTS, and the skills in `.agents/skills/`. Any person or agent can read the rules and use the skills from that copy, without this repository or any harness configuration. A project keeps its Framework version until `dev-framework apply` runs in it.
 
 ## Supported harnesses
 
-| Harness | Skills target | Global prompt target |
-| --- | --- | --- |
-| Pi | `~/.agents/skills/<name>/` | `~/.pi/agent/AGENTS.md` |
-| Claude Code | `~/.claude/skills/<name>/` | `~/.claude/CLAUDE.md` |
+A harness finds the skills in the project: Pi and Codex read `.agents/skills/`, and Claude Code reads `.claude/skills`, which links to it. The skills and rules are written to read the same in each.
 
-Codex also reads `~/.agents/skills/`, so it receives the Pi skill copies without being an official target. Another harness can be added later with an entry in [scripts/harnesses.ts](scripts/harnesses.ts).
+## Install
+
+Requirements: Bun 1.3.14 and Git. Clone this repository anywhere, and link the command into a directory on your `PATH`:
+
+```bash
+ln -s "$PWD/bin/dev-framework" ~/.local/bin/dev-framework
+```
+
+The command copies from this checkout, so it applies only a clean `main` unless told otherwise.
+
+## Usage
+
+Run it at the root of the project's main checkout:
+
+| Command | Effect |
+| --- | --- |
+| `dev-framework apply --check` | Show what would change, and write nothing |
+| `dev-framework apply` | Update a Framework project, one with `dev.yaml`, to this Framework |
+| `dev-framework apply --adopt` | Add the Framework to a repository without `dev.yaml` |
+| `dev-framework --help` | Show the usage and every option |
+
+Apply copies the managed material, links `.claude/skills` to `../.agents/skills`, records the source commit and the managed paths in `.dev/framework.json`, and regenerates the Plan map and the Knowledge index. It refuses to overwrite uncommitted work, and commits nothing. It also refuses, until the matching option overrides it:
+
+- a source checkout that is not a clean `main` (`--allow-unmerged`);
+- a blackbox or collaborative leaf in progress, which runs under the current rules (`--allow-running`).
+
+Then reload the harness, so it loads the new skills, and run `dev-doctor` in the project. It finishes an adoption, migrates records written for an earlier Framework, checks the project against the rules, and proposes the commit.
+
+## What a project receives
+
+`project/` mirrors a project root:
+
+| Source | Destination in the project |
+| --- | --- |
+| `project/knowledge/dev-framework.md` and `project/knowledge/dev-framework/` | The rules index and the rules |
+| `project/README.section.md`, `project/AGENTS.section.md` | Managed sections in root `README.md` and `AGENTS.md` |
+| `project/.agents/skills/` | Every skill, and the scripts in `dev-framework/` that the skills use |
+
+Links inside `project/` resolve the same way in the source and in a project. Start at [Dev Framework rules](project/knowledge/dev-framework.md); the list of managed material is in [Project structure](project/knowledge/dev-framework/project-structure.md#framework-managed-material).
+
+| Skills | Purpose |
+| --- | --- |
+| `dev-next`, `dev-plan`, `dev-explore`, `dev-collaborate`, `dev-blackbox-dispatch`, `dev-blackbox-implement`, `dev-blackbox-review` | The workflow |
+| `grilling`, `research`, `prototype` | Used by the workflow skills |
+| `dev-doctor` | Finishes an adoption or update, and checks the project against the rules |
+| `handoff` | Creates and resumes session checkpoints |
+| `writing-for-agents` | Guides writing skills and agent instructions |
+| `dev-framework-feedback` | Reports a problem with the Framework, for `resolve-feedback` in this repository |
 
 ## Layout
 
 ```
-agent-loadout/
-├── .agents/skills/      Skills for working on this repository; not installed
+dev-framework/
+├── .agents/skills/      Skills for working on this repository; not copied into projects
 ├── .claude/skills       Link to ../.agents/skills, for Claude Code
 ├── AGENTS.md            Rules for developing this repository
 ├── README.md
-├── package.json         Repository tooling
-├── prompt/              Global prompt parts
-│   ├── common.md        Shared by every harness
-│   └── <harness>.md     Per-harness additions
-├── scripts/             Apply script, size report, and repository tests
-└── skills/              Copied one-to-one into each harness's skills directory
-    ├── dev-framework/   Framework source, no SKILL.md
-    │   └── project/     Mirrors a project root; copied into Framework projects,
-    │                    including the workflow skills in project/.agents/skills/
-    ├── dev-doctor/      Adopts, updates, and checks the Framework in a project
-    ├── handoff/
-    ├── loadout-feedback/  Reports problems with this material from any project
-    └── writing-for-agents/
+├── bin/dev-framework    The command; runs cli/main.ts
+├── cli/                 The command's source and tests
+├── project/             Mirrors a project root; copied into Framework projects
+├── scripts/             Size report and repository tests
+└── tests/               Tests of the scripts copied into projects
 ```
 
-`.agents/skills/` holds `resolve-feedback`, which turns the reports `loadout-feedback` writes in other projects into changes here, through grilling with the user. Every direct child of `skills/` is installed into the harness. The Framework's workflow skills (`dev-next`, `dev-plan`, `dev-explore`, `dev-collaborate`, `dev-blackbox-dispatch`, `dev-blackbox-implement`, `dev-blackbox-review`) and the skills they use (`grilling`, `research`, `prototype`) are not; they live in each Framework project, where they match that project's version of the rules.
+`.agents/skills/` holds `resolve-feedback`, which turns the reports `dev-framework-feedback` writes in projects into changes here, through grilling with the user. It also links `writing-for-agents` from `project/`, for writing skills here.
 
-## Applying
+## Scripts
 
-Applying copies or generates files only when the script runs; it does not link harness directories to this repository. Editing files or switching branches here does not affect any harness until the next apply.
+The project scripts live in `project/.agents/skills/dev-framework/scripts/`, beside [review.md](project/.agents/skills/dev-framework/review.md), which says how to run and judge a review.
 
-```bash
-bun run apply <pi | claude-code | all> --check   # show what would change
-bun run apply <pi | claude-code | all>           # apply it
-```
+| Script | Purpose |
+| --- | --- |
+| `map.ts` | Checks the Plan and the Knowledge layout, and generates `plan/map.md`, the browser view `.tmp/plan/map.html`, and `knowledge/README.md`; `--check` reports what is stale |
+| `check.ts` | Every rule break a script can find, by group, with its fix, including leftovers of earlier Frameworks |
+| `review.ts` | Plans a defect or polish review in batches, each with the rule sections its documents are judged against and the leads scripts found; skips what held and has not changed |
+| `findings.ts` | Records judges' reports in the review state, `.dev/review.jsonl`, and lists, sets, and answers findings |
+| `state.ts` | Reads and writes the review state |
 
-- Skills: every direct child of `skills/`, without test files, goes into the harness's skills directory. Skills applied earlier but no longer in this repository are removed.
-- Global prompt: `prompt/common.md` plus `prompt/<harness>.md`, when it exists, goes into a section between `<!-- agent-loadout:start -->` and `<!-- agent-loadout:end -->`. Text outside the section stays as it is.
-- `.agent-loadout.json` in each skills directory records what was applied, so the script can tell repository changes from edits made in the harness. It refuses to overwrite such edits unless `--force` is given, and never touches a skill it did not apply, or `~/.claude/skills/synced/`.
-- Harness paths live in [scripts/harnesses.ts](scripts/harnesses.ts).
+A rule that a script can test without false alarms is checked by one. A check that runs in `map.ts` catches a mistake when a node or Knowledge document is written, because every workflow skill regenerates the map; it also blocks its output, so it belongs there only when an edit can always fix it. Other checks run in `check.ts`, at the commit gate and when `dev-doctor` runs. A pattern a script can find but only judgment can settle becomes a lead in `review.ts`.
+
+The scripts need only Bun. Their tests live in `tests/`, outside `project/`, so they are not copied into projects.
+
+## Changing the Framework
+
+1. Edit the files here, then run `bun run lint`, `bun run typecheck`, and `bun run test`.
+2. Merge into `main`.
+3. Run `dev-framework apply` and then `dev-doctor` in each Framework project.
 
 ## Sources
 
 | Material | Origin |
 | --- | --- |
-| `prompt/common.md` | Rewritten from the my-pi global prompt (`AGENTS.md` at my-pi `8b12776`); covers agent behavior only |
-| `skills/handoff/` | my-pi `8b12776`, made harness-neutral |
-| `skills/writing-for-agents/` | [mattpocock/skills](https://github.com/mattpocock/skills) `c55ee46`, unchanged; MIT, `LICENSE` included |
-| `skills/dev-framework/project/.agents/skills/grilling/` | The my-pi Framework version, adapted from mattpocock/skills `c55ee46`; MIT, `LICENSE` included |
-| `skills/dev-framework/project/.agents/skills/research/`, `prototype/` | mattpocock/skills `c55ee46`, unchanged; MIT, `LICENSE` included |
-| `skills/dev-framework/project/knowledge/dev-framework/plan-documentation/explore.md` | The explore node's wayfinding map is adapted from the `wayfinder` skill of mattpocock/skills `d81f3a1`; MIT |
+| `project/.agents/skills/handoff/` | my-pi `8b12776`, made harness-neutral |
+| `project/.agents/skills/writing-for-agents/` | [mattpocock/skills](https://github.com/mattpocock/skills) `c55ee46`, unchanged; MIT, `LICENSE` included |
+| `project/.agents/skills/grilling/` | The my-pi Framework version, adapted from mattpocock/skills `c55ee46`; MIT, `LICENSE` included |
+| `project/.agents/skills/research/`, `prototype/` | mattpocock/skills `c55ee46`, unchanged; MIT, `LICENSE` included |
+| `project/knowledge/dev-framework/plan-documentation/explore.md` | The explore node's wayfinding map is adapted from the `wayfinder` skill of mattpocock/skills `d81f3a1`; MIT |
 | The rest of the Dev Framework | Redesigned here, using the my-pi Framework at `8b12776` as a reference; its writing rules are kept unchanged apart from frontmatter |
 
-## Development
+This repository was called agent-loadout until it stopped installing a global prompt and skills into each harness.
 
-Requirements: Bun 1.3.14.
+## Development
 
 ```bash
 bun install
