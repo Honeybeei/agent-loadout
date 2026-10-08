@@ -685,6 +685,28 @@ describe("loadPlan problems", () => {
     ]);
   });
 
+  test("unfinished work cannot depend on a cancelled node", () => {
+    const waits = (title: string, status: string) =>
+      node({
+        title,
+        parent: "root",
+        depends_on: ["dropped"],
+        kind: "explore",
+        status,
+      });
+    const errors = loadPlan(
+      project({
+        root: goal("Product", null),
+        dropped: leaf("Dropped", "root", "explore", "cancelled"),
+        waiting: waits("Waiting", "todo"),
+        finished: waits("Finished", "done"),
+      }),
+    ).errors;
+    expect(errors).toEqual([
+      'waiting: depends_on "dropped", which is cancelled; remove it, or depend on the node that holds that work now',
+    ]);
+  });
+
   test("a handed-off line in a goal or a done leaf links its receiver or says not planned", () => {
     const root = project({
       root: goal("Product", null).replace(

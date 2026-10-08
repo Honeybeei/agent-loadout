@@ -421,6 +421,9 @@ describe("command line", () => {
     expect(run(root).code).toBe(2);
     expect(run(root, "style").code).toBe(2);
     expect(run(root, "defect", "--changed-since", "nope").code).toBe(2);
+    const stray = run(root, "--batch", "1", "defect");
+    expect(stray.code).toBe(2);
+    expect(stray.err).toStartWith("Usage: bun review.ts");
     expect(run(root, "--batch", "1").err).toContain(
       ".tmp/review/plan.json does not exist",
     );

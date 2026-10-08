@@ -531,6 +531,11 @@ export function loadPlan(projectRoot: string): Plan {
       if (dependency === node.id) errors.push(`${node.id}: depends on itself`);
       else if (!nodes.has(dependency))
         errors.push(`${node.id}: depends_on "${dependency}" does not exist`);
+      // A cancelled node is never done, so unfinished work that waits for it would wait forever.
+      else if (!finished(node) && nodes.get(dependency)?.status === "cancelled")
+        errors.push(
+          `${node.id}: depends_on "${dependency}", which is cancelled; remove it, or depend on the node that holds that work now`,
+        );
     }
   }
 

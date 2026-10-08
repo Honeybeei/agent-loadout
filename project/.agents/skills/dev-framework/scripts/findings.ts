@@ -179,6 +179,12 @@ export function addReport(
       errors.push(
         `the verdict for ${entry.path} is "${verdict}"; write "holds" or "findings <numbers>"`,
       );
+    else
+      for (const cited of verdict.match(/\d+/g) ?? [])
+        if (!report.findings.has(Number(cited)))
+          errors.push(
+            `the verdict for ${entry.path} cites finding ${cited}, which the report does not have`,
+          );
     for (const lead of entry.leads)
       if (
         !/^finding \d+$|^not a finding: \S/.test(
