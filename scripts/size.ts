@@ -4,28 +4,27 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import { markdownLinks } from "../skills/dev-framework/project/.agents/skills/dev-framework/scripts/check.ts";
-import { REPO } from "./apply.ts";
+import { markdownLinks } from "../project/.agents/skills/dev-framework/scripts/check.ts";
+
+const REPO = resolve(import.meta.dir, "..");
 
 /** The areas agents read; a file counts in the first area that matches it. */
 export const AREAS: [string, RegExp][] = [
-  ["Global prompt", /^prompt\//],
+  ["Framework rules", /^project\/(?:knowledge\/|[^/]+\.section\.md$)/],
+  ["dev-doctor", /^project\/\.agents\/skills\/dev-doctor\//],
   [
-    "Framework rules",
-    /^skills\/dev-framework\/project\/(?:knowledge\/|[^/]+\.section\.md$)/,
+    "Other skills",
+    /^project\/\.agents\/skills\/(?:handoff|dev-framework-feedback)\//,
   ],
-  ["Workflow skills", /^skills\/dev-framework\/project\/\.agents\/skills\//],
-  ["dev-doctor", /^skills\/dev-doctor\//],
-  ["Other skills", /^skills\/(?!dev-framework\/)[^/]+\//],
+  ["Workflow skills", /^project\/\.agents\/skills\//],
   ["This repository's rules", /^(?:AGENTS\.md$|\.agents\/skills\/)/],
 ];
 
 // Third-party skills kept unchanged, as the README's Sources table lists them.
 const THIRD_PARTY =
-  /^skills\/(?:writing-for-agents|dev-framework\/project\/\.agents\/skills\/(?:research|prototype))\//;
+  /^(?:project\/)?\.agents\/skills\/(?:writing-for-agents|research|prototype)\//;
 
-const SKILL =
-  /^skills\/(?:dev-doctor|dev-framework\/project\/\.agents\/skills\/dev-[^/]+)\/SKILL\.md$/;
+const SKILL = /^project\/\.agents\/skills\/dev-[^/]+\/SKILL\.md$/;
 
 export const area = (path: string) =>
   THIRD_PARTY.test(path)

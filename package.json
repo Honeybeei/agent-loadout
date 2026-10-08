@@ -1,12 +1,11 @@
 {
-  "name": "agent-loadout",
+  "name": "dev-framework",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.14",
   "scripts": {
-    "apply": "bun scripts/apply.ts",
     "size": "bun scripts/size.ts",
-    "test": "bun test ./scripts ./skills",
+    "test": "bun test ./cli ./tests ./scripts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write ."

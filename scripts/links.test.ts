@@ -4,8 +4,9 @@ import { dirname, join, relative, resolve } from "node:path";
 import {
   anchors,
   markdownLinks,
-} from "../skills/dev-framework/project/.agents/skills/dev-framework/scripts/check.ts";
-import { REPO } from "./apply.ts";
+} from "../project/.agents/skills/dev-framework/scripts/check.ts";
+
+const REPO = resolve(import.meta.dir, "..");
 
 // Every relative link in the repository's Markdown must point at a file or directory that exists,
 // and a fragment into a Markdown file at one of its headings.
@@ -19,8 +20,8 @@ function markdownFiles(path: string): string[] {
   }
 }
 
-const files = ["README.md", "AGENTS.md", "prompt", "skills", ".agents"].flatMap(
-  (path) => markdownFiles(join(REPO, path)),
+const files = ["README.md", "AGENTS.md", "project", ".agents"].flatMap((path) =>
+  markdownFiles(join(REPO, path)),
 );
 
 test("finds the documents to check", () => {
