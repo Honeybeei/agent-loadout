@@ -20,10 +20,11 @@ Bring a Framework project up to the installed Framework. Sync replaces managed m
 Run on `main` in the main checkout. When a blackbox or collaborative leaf is `in_progress`, its implementation runs under the current rules: recommend updating after it merges, and continue only when the user agrees. Commit message: `chore: update the Dev Framework`.
 
 1. Run sync, then the map script. The map script may refuse records in an earlier format, such as a done node without its finishing line or an untagged ticket; the next step handles them.
-2. Return to the diagnosis, which offers the menu. Records written for an earlier Framework often break newer rules; the script messages give the fix. Three need more:
+2. Return to the diagnosis, which offers the menu. Records written for an earlier Framework often break newer rules; the script messages give the fix. These need more:
 
    | Finding | Migration |
    | --- | --- |
    | Plan: nodes without `kind` | Start a new Plan, as Propose says |
    | Links to paths an earlier Framework used | Point them to `knowledge/dev-framework/` |
    | Build status in Knowledge, which an earlier Framework asked for | Remove it. The Implemented line of each done implementation leaf links the Knowledge it implements instead. |
+   | Knowledge outside a category, or in a workspace's `knowledge/` | Recommend a category for each document by the question it answers, and a name without a milestone. Commit the moves before splitting a mixed document, so Git keeps each file's history. |

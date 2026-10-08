@@ -20,6 +20,7 @@ import {
   resolve,
 } from "node:path";
 import {
+  knowledgeIndex,
   loadPlan,
   type PlanNode,
   renderMap,
@@ -187,13 +188,10 @@ function checkWorkspaces(root: string, add: Add): string[] {
         "structure",
         `workspace ${workspace} has no README.md; add one that states its purpose and responsibilities`,
       );
-    if (
-      isDirectory(join(root, workspace, "knowledge")) &&
-      !existsSync(join(root, workspace, "knowledge", "README.md"))
-    )
+    if (isDirectory(join(root, workspace, "knowledge")))
       add(
-        "structure",
-        `${workspace}/knowledge/ has no README.md; add one that indexes its Knowledge`,
+        "knowledge",
+        `${workspace}/knowledge/ holds Knowledge outside root knowledge/; move each document into the root category whose question it answers, as Categories in knowledge/dev-framework/knowledge-documentation.md says, then fix the links to it`,
       );
     for (const other of workspaces)
       if (other.startsWith(`${workspace}/`))
@@ -598,8 +596,8 @@ export function diagnose(projectRoot: string): {
     if (!exists(path))
       add(
         "structure",
-        path === "plan/map.md"
-          ? "plan/map.md is missing; generate it with the map script"
+        path === "plan/map.md" || path === "knowledge/README.md"
+          ? `${path} is missing; generate it with the map script`
           : `${path} is missing; create it as dev-doctor's Adopt describes`,
       );
   if (
@@ -626,17 +624,27 @@ export function diagnose(projectRoot: string): {
     add("plan", "plan/map.md is stale; regenerate it with the map script");
 
   // Knowledge and SSoT
-  const knowledgeDirectories = [
-    "knowledge",
-    ...workspaces.filter((w) => w !== ".").map((w) => `${w}/knowledge`),
-  ].filter((directory) => isDirectory(join(root, directory)));
-  const knowledge = knowledgeDirectories
-    .flatMap((directory) => markdownFiles(join(root, directory)))
+  const knowledge = (
+    isDirectory(join(root, "knowledge"))
+      ? markdownFiles(join(root, "knowledge"))
+      : []
+  )
     .map((file) => relative(root, file))
     .filter((path) => basename(path) !== "README.md")
     .sort();
   for (const path of knowledge)
     if (!MANAGED_DOCUMENT.test(path)) checkKnowledge(root, path, add);
+  const index = knowledgeIndex(root);
+  for (const error of index.errors) add("knowledge", error);
+  if (
+    index.errors.length === 0 &&
+    exists("knowledge/README.md") &&
+    readFileSync(join(root, "knowledge/README.md"), "utf8") !== index.text
+  )
+    add(
+      "knowledge",
+      "knowledge/README.md is stale; regenerate it with the map script",
+    );
   const topics = [...topicOwners(root, knowledge).values()];
   for (const { topic, owners } of topics)
     if (owners.length > 1)
@@ -646,12 +654,7 @@ export function diagnose(projectRoot: string): {
           ? `"${topic}" is in canonical_for of ${owners.join(" and ")}; the Framework owns it, so remove the restated rule, link to the Framework's, and keep only project-specific rules, under a topic the Framework does not own`
           : `"${topic}" is in canonical_for of ${owners.join(" and ")}; give it one owner, which keeps the detail, and leave a short summary with a link in the other`,
       );
-  const indexes = markdown.filter(
-    (path) =>
-      basename(path) === "README.md" &&
-      knowledgeDirectories.some((d) => path.startsWith(`${d}/`)),
-  );
-  for (const path of [...knowledge, ...indexes]) {
+  for (const path of knowledge) {
     if (MANAGED_DOCUMENT.test(path)) continue;
     blankCode(readFileSync(join(root, path), "utf8"))
       .split("\n")
@@ -667,8 +670,7 @@ export function diagnose(projectRoot: string): {
 
   // Links
   const inKnowledgeOrPlan = (path: string) =>
-    path.startsWith("plan/") ||
-    knowledgeDirectories.some((directory) => path.startsWith(`${directory}/`));
+    path.startsWith("plan/") || path.startsWith("knowledge/");
   const anchorsOf = new Map<string, Set<string>>();
   for (const path of markdown)
     for (const { target, fragment, resolved } of relativeLinks(root, path)) {
@@ -720,12 +722,6 @@ export function diagnose(projectRoot: string): {
       ],
     ],
     ["plan/README.md", ["plan/map.md"]],
-    ...workspaces
-      .filter((w) => w !== "." && exists(`${w}/knowledge/README.md`))
-      .map((w): [string, string[]] => [
-        `${w}/README.md`,
-        [`${w}/knowledge/README.md`],
-      ]),
   ];
   for (const [from, targets] of owed) {
     if (!exists(from)) continue;
@@ -750,7 +746,7 @@ export function diagnose(projectRoot: string): {
     path === "plan/README.md" ||
     path === "plan/map.md" ||
     workspaces.some((w) => w !== "." && path === `${w}/README.md`) ||
-    knowledgeDirectories.some((directory) => path.startsWith(`${directory}/`));
+    path.startsWith("knowledge/");
   for (const path of markdown)
     if (navigable(path) && !MANAGED_DOCUMENT.test(path) && !linked.has(path))
       add(
@@ -763,7 +759,8 @@ export function diagnose(projectRoot: string): {
     (path) =>
       !path.split("/").some((part) => part.startsWith(".")) &&
       !MANAGED_DOCUMENT.test(path) &&
-      path !== "plan/map.md",
+      path !== "plan/map.md" &&
+      path !== "knowledge/README.md",
   );
   for (const path of documents) {
     const lines = hardWraps(readFileSync(join(root, path), "utf8"));

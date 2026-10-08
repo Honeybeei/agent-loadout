@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  knowledgeIndex,
   loadPlan,
   renderMap,
   sections,
@@ -50,7 +51,7 @@ const node = (id: string, parent: string | null, kind: string, body = "") =>
   `---\ntitle: ${id}\nparent: ${parent}\ndepends_on: []\nkind: ${kind}\nstatus: ${kind === "goal" ? "open" : "todo"}\n---\n\n# ${id}\n\n## Goal\nA goal.\n${body}${kind === "goal" ? "" : "\n## Record\n"}`;
 
 const doc = (title: string, body = "") =>
-  `---\ncanonical_for:\n  - ${title}\n---\n\n# ${title}\n${body}`;
+  `---\ncanonical_for:\n  - ${title}\nread_when: before changing ${title}\n---\n\n# ${title}\n${body}`;
 
 /** An adopted project with one Knowledge document, committed. */
 function project(files: Record<string, string> = {}): string {
@@ -64,15 +65,16 @@ function project(files: Record<string, string> = {}): string {
     "dev.yaml": "workspaces:\n  - .\n",
     "README.md":
       "# Project\n\nRead [AGENTS](AGENTS.md), [Knowledge](knowledge/README.md), and [Plan](plan/README.md).\n",
-    "knowledge/README.md":
-      "# Knowledge\n\n- [Chat](chat.md): read before changing chat.\n",
-    "knowledge/chat.md": doc("Chat", "\nChat streams answers.\n"),
+    "knowledge/product/chat.md": doc("Chat", "\nChat streams answers.\n"),
     "plan/README.md": "# Plan\n\nRead the [map](map.md).\n",
     "plan/nodes/root.md": node("root", null, "goal"),
     ...files,
   });
   for (const change of planSync(root).changes) change.apply(root);
-  write(root, { "plan/map.md": renderMap(loadPlan(root)) });
+  write(root, {
+    "plan/map.md": renderMap(loadPlan(root)),
+    "knowledge/README.md": knowledgeIndex(root).text ?? "",
+  });
   git(root, "add", "-A");
   git(root, "commit", "-q", "-m", "Adopt");
   return root;
@@ -139,28 +141,28 @@ describe("batches", () => {
     const { batches, total } = prepareReview(root, "defect");
     expect(batches.map((b) => [b.type, b.entries.map((e) => e.path)])).toEqual([
       ["agents", ["AGENTS.md"]],
-      ["readme", ["README.md", "knowledge/README.md", "plan/README.md"]],
-      ["knowledge", ["knowledge/chat.md"]],
+      ["readme", ["README.md", "plan/README.md"]],
+      ["knowledge", ["knowledge/product/chat.md"]],
       ["goal", ["plan/nodes/root.md"]],
       ["explore", ["plan/nodes/a.md"]],
     ]);
-    expect(total).toBe(7);
+    expect(total).toBe(6);
   });
 
   test("a batch holds about 5,000 words, and a larger document gets its own", () => {
     const long = (n: number) => `${"word ".repeat(n)}\n`;
     const root = project({
-      "knowledge/a.md": doc("A", long(3000)),
-      "knowledge/b.md": doc("B", long(3000)),
-      "knowledge/c.md": doc("C", long(6000)),
+      "knowledge/product/a.md": doc("A", long(3000)),
+      "knowledge/product/b.md": doc("B", long(3000)),
+      "knowledge/product/c.md": doc("C", long(6000)),
     });
     const knowledge = prepareReview(root, "polish").batches.filter(
       (b) => b.type === "knowledge",
     );
     expect(knowledge.map((b) => b.entries.map((e) => e.path))).toEqual([
-      ["knowledge/a.md", "knowledge/chat.md"],
-      ["knowledge/b.md"],
-      ["knowledge/c.md"],
+      ["knowledge/product/a.md", "knowledge/product/chat.md"],
+      ["knowledge/product/b.md"],
+      ["knowledge/product/c.md"],
     ]);
   });
 
@@ -178,7 +180,10 @@ describe("batches", () => {
       [`${RULES_DIRECTORY}/knowledge-documentation.md`]:
         "---\nmanaged_by: dev-framework\n---\n\n# Edited\n",
     });
-    expect(paths("polish")).toEqual(["knowledge/chat.md", "plan/nodes/a.md"]);
+    expect(paths("polish")).toEqual([
+      "knowledge/product/chat.md",
+      "plan/nodes/a.md",
+    ]);
   });
 });
 
@@ -189,36 +194,50 @@ describe("leads", () => {
         "Glossary",
         "\n- **Desktop core**: the crate. Avoid: Core alone, engine.\n",
       ),
-      "knowledge/chat.md": doc(
+      "knowledge/product/chat.md": doc(
         "Chat",
-        "\nThe engines stream for now.\n\nChecked on 2026-10-01.\n\nThe desktop core and the Core.\n\nStreaming is not yet implemented.\n\nSee [the leaf](../plan/nodes/a.md) and [the crate](../crates/desktop-core-engine/README.md).\n",
+        "\nThe engines stream for now.\n\nChecked on 2026-10-01.\n\nThe desktop core and the Core.\n\nStreaming is not yet implemented.\n\nSee [the leaf](../../plan/nodes/a.md) and [the crate](../../crates/desktop-core-engine/README.md).\n",
       ),
       "plan/nodes/a.md": node("a", "root", "explore"),
     });
-    expect(notes(root, "defect", "knowledge/chat.md")).toEqual([
-      'lead: line 8 uses engine, which the glossary avoids in favor of "Desktop core": the same sense?',
-      'lead: line 8 says "for now": build status, or a fact about the product?',
-      "lead: line 10 has the date 2026-10-01: history, or when a fact was checked?",
-      'lead: line 12 uses Core alone, which the glossary avoids in favor of "Desktop core": the same sense?',
+    expect(notes(root, "defect", "knowledge/product/chat.md")).toEqual([
+      'lead: line 9 uses engine, which the glossary avoids in favor of "Desktop core": the same sense?',
+      'lead: line 9 says "for now": build status, or a fact about the product?',
+      "lead: line 11 has the date 2026-10-01: history, or when a fact was checked?",
+      'lead: line 13 uses Core alone, which the glossary avoids in favor of "Desktop core": the same sense?',
       "lead: links plan/nodes/a.md: work history or status in Knowledge?",
     ]);
+  });
+
+  test("point at Knowledge named after a milestone, one of root's child goals", () => {
+    const root = project({
+      "plan/nodes/02-mlp.md": node("02-mlp", "root", "goal"),
+      "knowledge/product/mlp-definition.md": doc("EdgeKeep MLP settings"),
+      "knowledge/product/settings.md": doc("Settings, like MLPs elsewhere"),
+    });
+    expect(
+      notes(root, "defect", "knowledge/product/mlp-definition.md"),
+    ).toEqual([
+      "lead: its file name names mlp, as the goal 02-mlp does: a document scoped to a milestone or piece of work, rather than a subject?",
+    ]);
+    expect(notes(root, "defect", "knowledge/product/settings.md")).toEqual([]);
   });
 
   test("point at a repeat of another document, unless the line links it", () => {
     const sentence =
       "Every answer cites the passages it used, so the user can check each claim against its source.";
     const root = project({
-      "knowledge/chat.md": doc("Chat", `\n${sentence}\n`),
+      "knowledge/product/chat.md": doc("Chat", `\n${sentence}\n`),
       "plan/nodes/a.md": node(
         "a",
         "root",
         "explore",
-        `\n## Notes\n- ${sentence}\n- As [Chat](../../knowledge/chat.md) says: ${sentence}\n`,
+        `\n## Notes\n- ${sentence}\n- As [Chat](../../knowledge/product/chat.md) says: ${sentence}\n`,
       ),
     });
     expect(notes(root, "defect", "plan/nodes/a.md")).toEqual([
       "status todo",
-      `lead: line 15 repeats 17 or more words of knowledge/chat.md:8: a gist with a link, or a second owner? "- Every answer cites the passages it used, so the user can check each…"`,
+      `lead: line 15 repeats 17 or more words of knowledge/product/chat.md:9: a gist with a link, or a second owner? "- Every answer cites the passages it used, so the user can check each…"`,
     ]);
   });
 
@@ -232,7 +251,7 @@ describe("leads", () => {
     const sentence =
       "Every answer cites the passages it used, so the user can check each claim against its source.";
     const root = project({
-      "knowledge/chat.md": doc("Chat", `\n${sentence}\n`),
+      "knowledge/product/chat.md": doc("Chat", `\n${sentence}\n`),
     });
     write(root, {
       "plan/nodes/a.md": node(
@@ -246,7 +265,7 @@ describe("leads", () => {
       .batches.flatMap((b) => b.entries)
       .find((e) => e.path === "plan/nodes/a.md")?.notes;
     expect(leads?.[1]).toStartWith(
-      "lead: line 15 repeats 17 or more words of knowledge/chat.md:8",
+      "lead: line 15 repeats 17 or more words of knowledge/product/chat.md:9",
     );
   });
 
@@ -299,27 +318,27 @@ describe("leads", () => {
     const root = project({ "plan/nodes/a.md": node("a", "root", "explore") });
     write(root, {
       ".tmp/doctor/findings.md":
-        "# Doctor Findings\n\n- Commit: abc\n- Review: defect, every document\n\n## F1 · defect · declined\n\n- File: knowledge/chat.md:8\n- Quote: Chat streams answers.\n- Rule: x\n- Problem: Vague.\n- Fix: y\n",
+        "# Doctor Findings\n\n- Commit: abc\n- Review: defect, every document\n\n## F1 · defect · declined\n\n- File: knowledge/product/chat.md:9\n- Quote: Chat streams answers.\n- Rule: x\n- Problem: Vague.\n- Fix: y\n",
     });
     expect(notes(root, "defect", "plan/nodes/root.md")).toContain(
       "child a: explore, todo",
     );
-    expect(notes(root, "defect", "knowledge/chat.md")).toEqual([
-      "declined F1 at knowledge/chat.md:8: Vague.",
+    expect(notes(root, "defect", "knowledge/product/chat.md")).toEqual([
+      "declined F1 at knowledge/product/chat.md:9: Vague.",
     ]);
-    expect(notes(root, "polish", "knowledge/chat.md")).toEqual([]);
+    expect(notes(root, "polish", "knowledge/product/chat.md")).toEqual([]);
   });
 
   test("polish points at long Knowledge and long Record lines", () => {
     const root = project({
-      "knowledge/chat.md": doc("Chat", "\nline\n".repeat(80)),
+      "knowledge/product/chat.md": doc("Chat", "\nline\n".repeat(80)),
       "plan/nodes/a.md": node("a", "root", "explore").replace(
         "## Record\n",
         `## Record\n- Planned: ${"word ".repeat(60)}\n`,
       ),
     });
-    expect(notes(root, "polish", "knowledge/chat.md")).toEqual([
-      "lead: 167 lines, above the 150 at which Length asks to compress or split",
+    expect(notes(root, "polish", "knowledge/product/chat.md")).toEqual([
+      "lead: 168 lines, above the 150 at which Length asks to compress or split",
     ]);
     expect(notes(root, "polish", "plan/nodes/a.md")[1]).toStartWith(
       "lead: a Record line of 62 words",
@@ -340,7 +359,7 @@ describe("command line", () => {
   test("lists the batches, and prints one with its rules, topics, and documents", () => {
     const root = project();
     expect(run(root, "defect").out).toStartWith(
-      "Defect review of 6 documents, every document: 4 batches\n1. agents: 1 documents,",
+      "Defect review of 5 documents, every document: 4 batches\n1. agents: 1 documents,",
     );
     const batch = run(root, "defect", "--batch", "3").out;
     expect(batch).toStartWith(
@@ -349,8 +368,8 @@ describe("command line", () => {
     expect(batch).toContain(
       `- ${RULES_DIRECTORY}/knowledge-documentation.md#what-knowledge-holds\n`,
     );
-    expect(batch).toContain('- "Chat": knowledge/chat.md\n');
-    expect(batch).toContain("Documents\n- knowledge/chat.md (");
+    expect(batch).toContain('- "Chat": knowledge/product/chat.md\n');
+    expect(batch).toContain("Documents\n- knowledge/product/chat.md (");
     expect(
       renderBatch(root, "defect", prepareReview(root, "defect").batches, 9),
     ).toBe("");

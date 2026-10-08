@@ -1,13 +1,14 @@
-// Generates plan/map.md and the browser view .tmp/plan/map.html from plan/nodes/*.md,
-// and reports Plan structure problems.
+// Generates plan/map.md and the browser view .tmp/plan/map.html from plan/nodes/*.md, and the Knowledge
+// index knowledge/README.md from each Knowledge document's frontmatter; reports what blocks either.
 // Usage: bun map.ts [project-root] [--check]
-// Each problem blocks the map, so a check belongs here only when an edit to the node can always fix it.
+// Each problem blocks its output, so a check belongs here only when an edit to the files can always fix it.
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -564,6 +565,177 @@ export function loadPlan(projectRoot: string): Plan {
   checkGoalHistory(projectRoot, nodes, errors);
   checkDecisionDates(projectRoot, nodes, errors);
   return { root, nodes, errors };
+}
+
+/** The Framework's Knowledge categories, each with the question it answers, as knowledge-documentation.md lists them. */
+export const CATEGORIES: Record<string, string> = {
+  product: "What it must do, and why: purpose, behavior, API contracts",
+  architecture:
+    "How it is structured: components, boundaries, state, technology",
+  engineering:
+    "How the code is worked on: toolchain, validation, conventions, repository layout",
+  delivery:
+    "How it reaches its users: release, publishing, signing, hosting, installation",
+  research: "Outside facts and studies that no single subject owns yet",
+};
+
+const KNOWLEDGE_RULES = "knowledge/dev-framework/knowledge-documentation.md";
+const ROOT_DOCUMENTS = ["README.md", "glossary.md", "dev-framework.md"];
+
+const frontmatterOf = (text: string): Record<string, unknown> | undefined => {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text);
+  try {
+    const data: unknown = match ? Bun.YAML.parse(match[1] ?? "") : undefined;
+    return typeof data === "object" && data !== null && !Array.isArray(data)
+      ? (data as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const isDirectory = (path: string) =>
+  existsSync(path) && statSync(path).isDirectory();
+
+/** The project's categories: the Framework's, then those dev.yaml declares under knowledge_categories. */
+function categoriesOf(projectRoot: string, errors: string[]) {
+  const categories = { ...CATEGORIES };
+  const path = join(projectRoot, "dev.yaml");
+  let declared: unknown;
+  try {
+    declared = existsSync(path)
+      ? (
+          Bun.YAML.parse(readFileSync(path, "utf8")) as {
+            knowledge_categories?: unknown;
+          } | null
+        )?.knowledge_categories
+      : undefined;
+  } catch {
+    // The diagnosis reports invalid YAML.
+  }
+  if (declared === undefined) return categories;
+  if (
+    typeof declared !== "object" ||
+    declared === null ||
+    Array.isArray(declared) ||
+    !Object.entries(declared).every(
+      ([name, meaning]) =>
+        KEBAB.test(name) &&
+        typeof meaning === "string" &&
+        meaning.trim() !== "",
+    )
+  )
+    errors.push(
+      `dev.yaml: knowledge_categories must map each kebab-case category name to the question it answers, as Categories in ${KNOWLEDGE_RULES} says`,
+    );
+  else Object.assign(categories, declared);
+  return categories;
+}
+
+/**
+ * knowledge/README.md as generated from each Knowledge document's title, read_when, and canonical_for,
+ * and the problems that block it; no text when the project has no knowledge/.
+ */
+export function knowledgeIndex(projectRoot: string): {
+  text?: string;
+  errors: string[];
+} {
+  const errors: string[] = [];
+  const directory = join(projectRoot, "knowledge");
+  if (!isDirectory(directory)) return { errors };
+  const categories = categoriesOf(projectRoot, errors);
+  const entriesOf = (path: string) =>
+    readdirSync(join(projectRoot, path), { withFileTypes: true }).sort(
+      (a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+    );
+  const describe = (path: string, depth: number) => {
+    const text = readFileSync(join(projectRoot, path), "utf8");
+    const fields = frontmatterOf(text);
+    const readWhen = fields?.read_when;
+    if (typeof readWhen !== "string" || readWhen.trim() === "")
+      errors.push(
+        `${path}: frontmatter needs read_when, the tasks to read it before, such as "before changing persistence behavior"; take them from a sentence that says when to read it, and drop that sentence, as Form in ${KNOWLEDGE_RULES} says`,
+      );
+    const topics = Array.isArray(fields?.canonical_for)
+      ? fields.canonical_for.filter((t): t is string => typeof t === "string")
+      : [];
+    const title =
+      /^# (.+)$/m.exec(text.replace(/^---[\s\S]*?\n---/, ""))?.[1]?.trim() ??
+      path;
+    const when = typeof readWhen === "string" ? readWhen.trim() : "";
+    return `${"  ".repeat(depth)}- [${title}](${path.slice("knowledge/".length)}): read ${when.replace(/\.$/, "")}.${topics.length > 0 ? ` Owns: ${topics.join("; ")}.` : ""}`;
+  };
+  /** A category's documents, each followed by the subdocuments in the directory named after it. */
+  const list = (path: string, depth: number): string[] =>
+    entriesOf(path).flatMap((entry) => {
+      const child = `${path}/${entry.name}`;
+      if (entry.isDirectory()) {
+        if (!existsSync(join(projectRoot, `${child}.md`)))
+          errors.push(
+            `${child}/ has no parent document ${child}.md; a directory inside a category holds the subdocuments of the document it is named after, as Subdocuments in ${KNOWLEDGE_RULES} says`,
+          );
+        return [];
+      }
+      if (!entry.name.endsWith(".md")) return [];
+      if (entry.name === "README.md") {
+        errors.push(
+          `${child}: a category holds only documents, and knowledge/README.md is the index; move what it says into the documents, then delete it`,
+        );
+        return [];
+      }
+      const children = child.slice(0, -".md".length);
+      return [
+        describe(child, depth),
+        ...(isDirectory(join(projectRoot, children))
+          ? list(children, depth + 1)
+          : []),
+      ];
+    });
+
+  for (const entry of entriesOf("knowledge"))
+    if (entry.isDirectory()) {
+      // The subdocuments of a document outside a category move with it.
+      if (
+        entry.name !== "dev-framework" &&
+        !(entry.name in categories) &&
+        !existsSync(join(directory, `${entry.name}.md`))
+      )
+        errors.push(
+          `knowledge/${entry.name}/ is not a category; move its documents into the category whose question each answers, or declare it under knowledge_categories in dev.yaml, as Categories in ${KNOWLEDGE_RULES} says`,
+        );
+    } else if (
+      entry.name.endsWith(".md") &&
+      !ROOT_DOCUMENTS.includes(entry.name)
+    )
+      errors.push(
+        `knowledge/${entry.name}: move it, with any subdocuments, into the category whose question it answers, as knowledge/<category>/${entry.name}, and update its incoming links, as Categories in ${KNOWLEDGE_RULES} says`,
+      );
+
+  const lines = [
+    "# Knowledge",
+    "",
+    `The project's Knowledge by category, generated by the map script from each document's \`read_when\` and \`canonical_for\`; never edit it by hand. [Knowledge documentation](dev-framework/knowledge-documentation.md#categories) defines the categories.`,
+    "",
+    ...(existsSync(join(directory, "glossary.md"))
+      ? [describe("knowledge/glossary.md", 0)]
+      : []),
+    ...(existsSync(join(directory, "dev-framework.md"))
+      ? [
+          "- [Dev Framework rules](dev-framework.md): read before working, as `AGENTS.md` says. The Framework manages them.",
+        ]
+      : []),
+  ];
+  for (const [name, question] of Object.entries(categories))
+    if (isDirectory(join(directory, name)))
+      lines.push(
+        "",
+        `## ${name[0]?.toUpperCase()}${name.slice(1)}`,
+        "",
+        `${question}.`,
+        "",
+        ...list(`knowledge/${name}`, 0),
+      );
+  return { text: `${lines.join("\n")}\n`, errors };
 }
 
 function waitingFor(node: PlanNode, nodes: Map<string, PlanNode>): string[] {
@@ -1167,29 +1339,43 @@ if (import.meta.main) {
     process.exit(2);
   }
   const projectRoot = resolve(positional[0] ?? ".");
+  const check = options.includes("--check");
   const plan = loadPlan(projectRoot);
-  if (plan.errors.length > 0) {
-    console.error(
-      `Plan problems:\n${plan.errors.map((e) => `- ${e}`).join("\n")}`,
-    );
-    process.exit(1);
+  const knowledge = knowledgeIndex(projectRoot);
+  let failed = false;
+  for (const [title, errors] of [
+    ["Plan problems", plan.errors],
+    ["Knowledge problems", knowledge.errors],
+  ] as const)
+    if (errors.length > 0) {
+      console.error(`${title}:\n${errors.map((e) => `- ${e}`).join("\n")}`);
+      failed = true;
+    }
+  const outputs: [string, string | undefined][] = [
+    ["plan/map.md", plan.errors.length === 0 ? renderMap(plan) : undefined],
+    [
+      "knowledge/README.md",
+      knowledge.errors.length === 0 ? knowledge.text : undefined,
+    ],
+  ];
+  for (const [file, output] of outputs) {
+    if (output === undefined) continue;
+    const path = join(projectRoot, file);
+    const current = existsSync(path) ? readFileSync(path, "utf8") : undefined;
+    if (current === output) console.log(`${file} is up to date`);
+    else if (check) {
+      console.error(`${file} is stale; regenerate it`);
+      failed = true;
+    } else {
+      writeFileSync(path, output);
+      console.log(`Wrote ${file}`);
+    }
   }
-  const output = renderMap(plan);
-  const path = join(projectRoot, "plan", "map.md");
-  const current = existsSync(path) ? readFileSync(path, "utf8") : undefined;
-  if (current === output) {
-    console.log("plan/map.md is up to date");
-  } else if (options.includes("--check")) {
-    console.error("plan/map.md is stale; regenerate it");
-    process.exit(1);
-  } else {
-    writeFileSync(path, output);
-    console.log("Wrote plan/map.md");
-  }
-  if (!options.includes("--check")) {
+  if (!check && plan.errors.length === 0) {
     const html = join(projectRoot, ".tmp", "plan", "map.html");
     mkdirSync(dirname(html), { recursive: true });
     writeFileSync(html, renderHtml(plan, recentChanges(projectRoot)));
     console.log("Wrote .tmp/plan/map.html");
   }
+  process.exit(failed ? 1 : 0);
 }

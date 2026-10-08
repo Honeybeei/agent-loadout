@@ -8,7 +8,7 @@ Review a `completed` implementation, then send findings back, or merge it with t
 2. Compare `main` with the report's Based on commit, outside Plan and Knowledge:
 
    ```bash
-   git diff --quiet <based-on> main -- . ':(exclude)plan' ':(exclude,glob)**/knowledge/**'
+   git diff --quiet <based-on> main -- . ':(exclude)plan' ':(exclude)knowledge'
    ```
 
    When it exits with 1, `main` has changes the implementation has not merged: ask in the review file for a refresh, merging `main` and verifying again, and stop.

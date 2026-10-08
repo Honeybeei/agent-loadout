@@ -83,6 +83,8 @@ export const RULES: Record<Review, Record<DocumentType, string[]>> = {
     ],
     knowledge: [
       "knowledge-documentation.md#what-knowledge-holds",
+      "knowledge-documentation.md#categories",
+      "knowledge-documentation.md#links-and-reading",
       "knowledge-documentation.md#glossary",
       "knowledge-documentation.md#maintenance",
       "project-structure.md#framework-managed-material",
@@ -243,7 +245,6 @@ function findLeads(
   documents: { path: string; type: DocumentType }[],
   everyDocument: { path: string; type: DocumentType }[],
   nodes: Map<string, PlanNode>,
-  knowledgeDirectories: string[],
 ): Map<string, string[]> {
   const leads = new Map<string, string[]>();
   const add = (path: string, lead: string) =>
@@ -317,6 +318,14 @@ function findLeads(
   };
 
   const glossary = glossaryAvoids(root);
+  // Root's child goals are often milestones, whose names a subject document does not carry.
+  const milestones = (nodes.get("root")?.children ?? [])
+    .filter((child) => child.kind === "goal")
+    .map((child) => ({
+      id: child.id,
+      stem: child.id.replace(/^(?:\d+-)+/, ""),
+    }))
+    .filter(({ stem }) => stem !== "");
   for (const { path, type } of documents) {
     const content = text(path);
     const node = nodeOf(path);
@@ -365,30 +374,35 @@ function findLeads(
       .sort((a, b) => b.run - a.run)
       .slice(0, REPEATS_PER_DOCUMENT))
       add(path, lead);
-    if (type === "knowledge")
+    if (type === "knowledge") {
       for (const link of markdownLinks(content)) {
         const target = relative(
           root,
           resolve(dirname(join(root, path)), link.file),
         );
-        const home = knowledgeDirectories.find((d) => path.startsWith(`${d}/`));
-        const other = knowledgeDirectories.find((d) =>
-          target.startsWith(`${d}/`),
-        );
         if (target.startsWith("plan/nodes/") && target !== "plan/nodes/root.md")
           add(path, `links ${target}: work history or status in Knowledge?`);
-        else if (
-          other &&
-          home &&
-          other !== home &&
-          home !== "knowledge" &&
-          other !== "knowledge"
-        )
+      }
+      const names = [
+        { what: "its file name", text: basename(path, ".md") },
+        ...[...topicOwners(root, [path]).values()].map(({ topic }) => ({
+          what: `its topic "${topic}"`,
+          text: topic,
+        })),
+      ];
+      for (const { id, stem } of milestones) {
+        const words = new RegExp(
+          `(?:^|[^a-z0-9])${stem.split("-").join("[ -]")}(?:$|[^a-z0-9])`,
+          "i",
+        );
+        const named = names.find(({ text }) => words.test(text));
+        if (named)
           add(
             path,
-            `links ${target} in another workspace's Knowledge: should the shared part live in root knowledge/?`,
+            `${named.what} names ${stem}, as the goal ${id} does: a document scoped to a milestone or piece of work, rather than a subject?`,
           );
       }
+    }
     if (node) nodeLeads(node, (lead) => add(path, lead));
   }
   return leads;
@@ -507,15 +521,6 @@ export function prepareReview(
   const root = realpathSync(projectRoot);
   const { documents } = diagnose(root);
   const plan = loadPlan(root);
-  const knowledgeDirectories = [
-    ...new Set(
-      documents
-        .filter((d) => d.type === "knowledge")
-        .map((d) =>
-          d.path.slice(0, d.path.indexOf("knowledge/") + "knowledge".length),
-        ),
-    ),
-  ];
   let selected = documents;
   let scope = "every document";
   if (since !== undefined) {
@@ -543,14 +548,7 @@ export function prepareReview(
     scope = `changed since ${since}`;
   }
 
-  const leads = findLeads(
-    root,
-    review,
-    selected,
-    documents,
-    plan.nodes,
-    knowledgeDirectories,
-  );
+  const leads = findLeads(root, review, selected, documents, plan.nodes);
   const declined = readFindings(root)?.findings.filter(
     (f) => f.status === "declined" && f.severity === review,
   );

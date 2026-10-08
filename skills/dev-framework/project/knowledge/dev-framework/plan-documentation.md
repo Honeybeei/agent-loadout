@@ -124,8 +124,8 @@ A decision, or a fact found along the way, is recorded with its owner:
 `plan/map.md` is generated from the node files, together with a browser view, `.tmp/plan/map.html`. Run the map script from the project root:
 
 ```bash
-bun .agents/skills/dev-framework/scripts/map.ts .           # check the Plan, and write the map and the view
-bun .agents/skills/dev-framework/scripts/map.ts . --check   # only report whether the map is stale
+bun .agents/skills/dev-framework/scripts/map.ts .           # check the Plan and Knowledge, and write the map, the view, and the Knowledge index
+bun .agents/skills/dev-framework/scripts/map.ts . --check   # only report whether the map or the index is stale
 ```
 
 The map shows, in order:
